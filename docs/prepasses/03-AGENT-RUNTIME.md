@@ -4,7 +4,7 @@
 **Scope:** one independent, non-Claude principal performing real Read → Edit → Test on a disposable local Git fixture; delegated workers use the same contract later. **No new general agent framework.**  
 **Repository baseline:** CLcode `main` at `2ba8a3100d046c87cb55e03d3dc985c3ce2cb5ef`.  
 **Pinned GPTopus donor:** `techrote/Chlaude-GPTopus` at [`849627463c3e2be660f9d24976320b072c107b34`](https://github.com/techrote/Chlaude-GPTopus/commit/849627463c3e2be660f9d24976320b072c107b34), branch `ultra/004-integration`. It is **not** the donor repository's `main` tip; do not substitute `main` silently.  
-**Read alongside:** [CLcode ROADMAP](../ROADMAP.md), [PLAN](../PLAN.md), [EXPERIMENTS](../EXPERIMENTS.md). External documentation checked 2026-11-23; exact links in `12.
+**Read alongside:** [CLcode ROADMAP](../ROADMAP.md), [PLAN](../PLAN.md), [EXPERIMENTS](../EXPERIMENTS.md). External documentation checked 2026-11-23; exact links in section 12.
 
 ## Contents
 
@@ -262,7 +262,7 @@ sequenceDiagram
   H-->>U: Final status, test result, diff, usage, any unknowns
 ~~~
 
-Minimal controller logic (pseudocode; actual `dispatch` response schema is documented in `2):
+Minimal controller logic (pseudocode; actual `dispatch` response schema is documented in section 2):
 
 ~~~ts
 async function runAgent(admittedRun) {
