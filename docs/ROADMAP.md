@@ -36,34 +36,30 @@ Pinned research reference for the first experiments:
 
 First priority: determine which functions can be reused **with no Claude process at all**. A standalone HTTP server is already a plausible foothold; independent worker lifecycle must be established experimentally.
 
-### B. Desktop has a distinct control/configuration path—and an embedded engine
+### B. Desktop's gateway seam is real—but **Claude-only officially**
 
-Official documentation reports:
+**Correction to the initial research hypothesis (November 2026):** "third-party inference" in Anthropic's documentation does **not** mean the Desktop Code harness is an officially model-agnostic agent runtime.
 
-- Desktop Code uses its **own copy of the Claude Code engine**, updated with Desktop; its version need not equal a separately installed CLI version.
-- The **Desktop app reads gateway configuration from its third-party inference configuration**, not merely `ANTHROPIC_BASE_URL` or CLI settings.
-- On supported Desktop builds, the in-app path is **Help → Troubleshooting → Enable Developer Mode**, then **Developer → Configure Third-Party Inference**.
-- A configured gateway must implement the Anthropic Messages API, particularly **`POST /v1/messages` streaming and tool use**; `GET /v1/models` is optional.
+- The [deployment comparison](https://code.claude.com/docs/en/third-party-integrations) lists corporate/cloud services (Anthropic, AWS, Google Cloud, Microsoft), but they are predominantly **alternative places to host or pay for Claude inference**, not an assortment of independent model families.
+- The [gateway overview](https://code.claude.com/docs/en/gateways) explicitly says Anthropic **does not support routing Claude Code to non-Claude models through any gateway**. Anthropic's built-in gateway routes to named Anthropic/Claude-serving cloud services.
+- The [Desktop 3P gateway guide](https://claude.com/docs/third-party/claude-desktop/gateway) explicitly describes **Claude models** served through a self-hosted gateway (which may be LiteLLM, Portkey or an in-house proxy). Its endpoint expects the Anthropic Messages API: `POST /v1/messages` including streaming and tool use; `GET /v1/models` is optional.
+- Desktop's gateway model auto-discovery **only shows recognizably Claude model IDs**. Explicit `inferenceModels` entries allow routing aliases and unrecognized IDs, but do **not** establish that Qwen/GPT/KAT are supported as the principal model or that their tool calls, streaming, thinking and compaction will work.
+- Desktop has its **own embedded Claude Code engine** and reads its **own third-party inference configuration**, not simply the CLI `ANTHROPIC_BASE_URL` setting. On supported builds the UI path is Help → Troubleshooting → Enable Developer Mode, then Developer → Configure Third-Party Inference.
+- The [legal/compliance documentation](https://code.claude.com/docs/en/legal-and-compliance) expressly limits modification and product redistribution of the Claude Code binary. Any adaptation of a proprietary Desktop/engine specimen is **research pending license review**, not a freely publishable CLcode foundation.
 
-Primary documentation:
+**Decision:** study the Desktop Code shell and embedded-engine interfaces early, but **do not treat vendor-provided gateway support as a model-replacement solution**. An Anthropic-compatible Qwen/GPT gateway on the disposable PC is an **optional, bounded, unsupported compatibility probe**. It must not become a prerequisite for independent CLcode implementation, nor silently consume the agent's engineering budget if unsupported. Give primary effort to the standalone GPTopus controller and an independently viable desktop shell/runtime boundary.
 
-- [Desktop application](https://code.claude.com/docs/en/desktop)
-- [Connect Claude Code to an LLM gateway — Desktop section](https://code.claude.com/docs/en/llm-gateway-connect#desktop-app)
-- [Deploy Claude Desktop on 3P with an LLM gateway](https://claude.com/docs/third-party/claude-desktop/gateway)
-
-**Important limitation:** these docs describe a supported *gateway connection*, generally serving Claude models. They do **not** prove that arbitrary non-Claude models behave correctly, that the Desktop can be redistributed or modified, or that its entire agent lifecycle can operate without Anthropic services. Test each claim separately. Do not rely on a proprietary vendor's entitlements or quota behavior as CLcode's architecture.
-
-This means **Desktop feasibility must be investigated early, in parallel with GPTopus controller work**, rather than waiting for a large custom runtime to be built.
+Do not edit the owner's stock Claude installation or assume commercial SaaS-provider enrollment is required for CLcode. Keep research observations separate from approved functionality and completed acceptance tests.
 
 ## 3. Two work tracks, one narrow convergence goal
 
 | Order | Track A — independent GPTopus backend | Track B — desktop/host reconnaissance |
 | --- | --- | --- |
-| 0 | Pin the known GPTopus commit, map imports and launch prerequisites | List the specific Desktop Code features worth preserving and record official architecture/gateway seams |
-| 1 | Run `oai-config.mjs` without Claude installed; persist a harmless configuration change (**E01**) | Document how Desktop's embedded Code engine differs from the standalone CLI and where the principal-model boundary is |
-| 2 | Invoke a **live non-Claude model request outside host hooks** (**E02**) | On the disposable PC **only, when available and appropriate**, pin and inspect one Desktop specimen and test its documented gateway configuration |
-| 3 | Own one new worker's spawn/status/steer/cancel lifecycle outside Claude (**E03–E04**) | Determine whether a non-Claude model can handle genuine streamed tool use through the desktop gateway; record unsupported behavior precisely |
-| 4 | Add one bounded real Read → Edit → Test loop in a fixture Git repo (**E06**) | Prove or reject an independent, legally maintainable desktop UX/engine integration strategy |
+| 0 | Pin the known GPTopus commit, map imports and launch prerequisites | List valuable Desktop Code behaviors and inspect the embedded-engine/UI architecture; document actual support and license boundaries |
+| 1 | Run `oai-config.mjs` without Claude installed; persist a harmless configuration change (**E01**) | Document which Desktop behaviors can be reproduced or independently implemented without depending on a modified proprietary executable |
+| 2 | Invoke a **live non-Claude model request outside host hooks** (**E02**) | Evaluate an independent desktop-shell option; optionally scope one **unsupported** non-Claude gateway compatibility experiment on the disposable PC |
+| 3 | Own one new worker's spawn/status/steer/cancel lifecycle outside Claude (**E03–E04**) | If an optional gateway probe is undertaken, record streaming/tool-call outcomes and stop on an unsupported boundary rather than engineering around it indefinitely |
+| 4 | Add one bounded real Read → Edit → Test loop in a fixture Git repo (**E06**) | Prove a sustainable, legally maintainable desktop UI/engine integration strategy |
 | 5 | Integrate only the *proved* loop into a graphical CLcode Code workspace | **E07–E08**, desktop plus no Anthropic inference, then owner GO/HOLD/STOP |
 
 Do **not** create two competing provider layers: CLcode owns the desktop/operator experience; reuse GPTopus as provider/control-plane source behind an interface wherever viable. The eventual run controller must be able to spawn, steer, inspect and cancel workers without asking Claude to start them.
@@ -89,7 +85,7 @@ The next implementer should **do real work**, not simply produce another archite
 1. Pin and inspect the GPTopus reference commit; identify what is directly executable versus what depends on Claude native hooks. Record a short dependency map with actual function/file names.
 2. Get the standalone web configuration process working in the available environment, or supply a reproducible Windows launch path if no disposable-PC access exists. Do not claim interactive acceptance without a real UI run.
 3. Attempt the smallest honest **host-independent provider call**, reusing an existing GPTopus client. If it cannot run, record the exact blocker and a minimal adapter plan; do not rewrite the entire client.
-4. In parallel, document the Desktop Code / embedded-engine / third-party-gateway seam from the official docs, then propose the smallest **disposable-PC** Desktop experiment. Do not install or change anything on the owner's main PC.
+4. In parallel, document the Desktop Code / embedded-engine boundary, the **Claude-only official gateway support**, and the feasibility of a genuinely independent desktop shell. Any foreign-model gateway probe is optional and exploratory—not the preferred architecture or a blocker to GPTopus/controller work. Do not install or change anything on the owner's main PC.
 5. Commit a focused working slice plus a short evidence entry. Prefer one cohesive change set rather than a fleet of scaffolding PRs.
 
 **First checkpoint output:** either (a) verifiable E01 and, ideally, E02 results plus a desktop feasibility map, or (b) source-grounded blockers and a runnable, narrowly scoped experiment. Include exact SHAs and actual commands; label anything not tested. Then move directly to independent worker spawn.
