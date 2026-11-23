@@ -8,7 +8,7 @@ The target is **CLcode Desktop Code**. CLI and GPTopus web-panel trials are step
 
 - **Hardware:** separate disposable Windows development PC; record OS build, available CPU/GPU/RAM, Node version, browser, and installed components.
 - **Repository identity:** always record the exact `techrote/CLcode` commit and the exact `techrote/Chlaude-GPTopus` commit; do not rely on an evolving branch name.
-- **Stock Claude protection:** no changes to the owner's stock Claude Desktop or its configuration; the disposable PC initially has no Claude Code installation.
+- **Specimen isolation:** all Desktop Code transplantation work happens on the disposable Windows PC. The specimen there may be modified, broken, reinstalled or replaced; the disk contains no important state. Record the exact specimen version/hash before destructive changes.
 - **Credentials:** use scoped test keys, never paste secret values or token-bearing localhost URLs into this file, issues, commits or logs.
 - **External effects:** use a throwaway fixture repo, and keep external GitHub pushes out of the initial coding loop.
 - **Fidelity:** explicitly label `mock`, `live provider`, `live tool execution` and `interactive desktop UI`. A mock cannot qualify a real acceptance gate.
