@@ -7,7 +7,7 @@
     "node": ">=20.11.0"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs",
+    "test": "node scripts/run-tests.mjs",
     "fixture": "node scripts/create-fixture.mjs",
     "hostless": "node src/cli.mjs",
     "serve": "node src/server.mjs"
