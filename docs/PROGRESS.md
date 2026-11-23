@@ -16,6 +16,7 @@ This file records the current engineering state and evidence boundaries. It is n
 | #7 — SPECIMEN-SURGERY-001 | `specimen/003-guarded-surgery` / `db27cd1c4eb7e949581f31d528bfb4a0efab8d79` | Hash-guarded, receipt-backed reversible specimen patching | Synthetic apply/rollback PASS; no real specimen modification yet |
 | #8 — SPECIMEN-LAUNCH-001 | `specimen/004-launch-trace` / `cb3a2fc242cd6faf2be38d3587641dbd276d1037` | Redacted Windows process-start/parent/command-line tracing | Node redaction/filter PASS; Windows WMI watcher NOT RUN |
 | #9 — RUNTIME-HARDENING-001 | `runtime/002-windows-integrity` / `83015186d2e79e1a57b1abf38f75ffa92ad8bc1a` | Clean admission, CLcode-owned commit paths, Windows process-tree cancellation | Runtime-only 11/11 tests pass; actual Windows taskkill tree behavior NOT RUN |
+| #10 — FIRST-WINDOWS-001 evaluator | `integration/first-windows-001` / `587c19a87668f8497ec8543401166b464dad5b17` | HOLD composition of specimen + hardened runtime + Desktop client stacks for one physical checkout | Reconstructed non-Windows integrated preflight PASS; PowerShell/physical Windows tests remain pending |
 | #2 — PREPASS-01 | `prepass/01-gptopus-extraction-20261123` / `90b521653d13859f29914dbdb8fc807e342711d0` | GPTopus host-independence archaeology | Source-grounded design/reference |
 | #1 — PREPASS-04 | `prepass/04-windows-desktop-20261123` / `c7f356250fe8ff37bca99c0b6023032e73521aea` | Disposable-Windows bootstrap and first Desktop vertical slice plan | Source-grounded plan; physical run not yet performed |
 
@@ -44,6 +45,7 @@ This file records the current engineering state and evidence boundaries. It is n
 - A guarded surgery layer now exists: exact baseline SHA, exact replacement count, dry-run, external backup, post-write hash verification and receipt-verified rollback.
 - Runtime integrity hardening now requires a clean worktree at admission, commits only files actually edited through CLcode, revalidates touched-file hashes before commit, and uses a Windows process-tree termination plan.
 - A redacted process-launch tracer now exists to catch short-lived Desktop → embedded-engine launches and their parent/child command-line structure without persisting raw credential-bearing arguments.
+- A single HOLD/evaluator branch now composes the current stacks and includes `scripts/first-windows-check.mjs` plus `docs/FIRST-WINDOWS-001.md` so the first physical session needs one checkout rather than branch switching.
 - Windows specimen-lab tooling exists to:
   - capture a cryptographic installation baseline;
   - record process/network observations;
@@ -98,8 +100,9 @@ The standalone Claude Code CLI remains an implementation reference/dependency on
 
 ## Immediate next engineering targets
 
-1. Run PR #3/#6/#7/#8 self-tests on the disposable PC, then capture the first real specimen baseline, static map, runtime/TCP observation and launch trace.
-2. Execute E01/E02/E06 on the physical PC using the hardened hostless runtime and fixture.
-3. Validate actual Windows process-tree cancellation against a test process with descendants.
-4. Use the static map + runtime + launch evidence to select the first hash-guarded Desktop surgery experiment.
-5. Connect the hardened DESKTOP-CLIENT-001 stack to the modified Desktop specimen once the engine/frontend control seam is identified.
+1. Check out **FIRST-WINDOWS-001 / PR #10** on the disposable PC and run `node scripts/first-windows-check.mjs`.
+2. Resolve any Windows-only preflight failure before configuring provider credentials or modifying the Desktop specimen.
+3. Capture the first real specimen baseline, static map, runtime/TCP observation and launch trace.
+4. Execute E01/E02/E06 and the actual Windows process-tree cancellation acceptance.
+5. Use the combined static/runtime/launch evidence to select one hash-guarded Desktop surgery experiment.
+6. Connect the hardened Desktop client to the transplanted control seam once principal-model ownership is empirically located.
