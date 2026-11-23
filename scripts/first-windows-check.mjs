@@ -19,12 +19,8 @@ function run(name, file, args = []) {
 }
 
 let ok = true;
-ok = run('Node runtime/desktop tests', 'node', ['--test', 'test/*.test.mjs']) && ok;
-// Node itself does not expand globs, so package.json remains the canonical test command.
-if (!results.at(-1).ok) {
-  results.pop();
-  ok = run('Node runtime/desktop tests', process.platform === 'win32' ? 'npm.cmd' : 'npm', ['test']) && ok;
-}
+// package.json is the canonical test command and avoids platform-specific shell glob behavior.
+ok = run('Node runtime/desktop tests', process.platform === 'win32' ? 'npm.cmd' : 'npm', ['test']) && ok;
 for (const [name, script] of [
   ['Specimen static map self-test', 'tools/specimen/Test-SpecimenMap.mjs'],
   ['Specimen runtime-correlation self-test', 'tools/specimen/Test-RuntimeAnalysis.mjs'],
