@@ -11,9 +11,11 @@ This file records the current engineering state and evidence boundaries. It is n
 | --- | --- | --- | --- |
 | #3 — SPECIMEN-LAB-001 | `specimen/001-windows-lab` / `2210b6494e33063c3373c06167f23d6d05d8f859` | Windows specimen baseline, runtime observation and bounded surgery tooling | Source prepared; Windows self-test still required on the disposable PC |
 | #4 — HOSTLESS-RUN-001 | `runtime/001-hostless-agent` / `0a4eaf52cde00b85faf0698a006e0879adf6820e` | CLcode-owned principal agent loop over pinned GPTopus provider bridge | Mock-provider mechanical PASS; real local filesystem/process/Git effects; E02/E06 still NOT RUN |
-| #5 — DESKTOP-CLIENT-001 | `desktop/001-runtime-client` / `cb13a3b7e73ce23ea42d159b4e5050fb8066b56f` | Desktop-side process client, run follower and UI projection over PR #4 JSONL service | 17/17 stacked Node tests reported passing; no graphical/specimen acceptance yet |
+| #5 — DESKTOP-CLIENT-001 | `desktop/001-runtime-client` / `2cdd0b5ac01ee41e7b34805e45bfc4943ced222e` | Desktop-side process client, run follower and UI projection, now explicitly stacked on PR #9 | Combined development tree 22/22 tests pass; no graphical/specimen acceptance yet |
 | #6 — SPECIMEN-MAP-001 | `specimen/002-control-path-map` / `b16909037b0fcfba1af4bddbc926218f62500059` | Read-only static control-surface scanner + runtime correlation | Synthetic scanner/runtime-analysis PASS; no real specimen scan yet |
 | #7 — SPECIMEN-SURGERY-001 | `specimen/003-guarded-surgery` / `db27cd1c4eb7e949581f31d528bfb4a0efab8d79` | Hash-guarded, receipt-backed reversible specimen patching | Synthetic apply/rollback PASS; no real specimen modification yet |
+| #8 — SPECIMEN-LAUNCH-001 | `specimen/004-launch-trace` / `cb3a2fc242cd6faf2be38d3587641dbd276d1037` | Redacted Windows process-start/parent/command-line tracing | Node redaction/filter PASS; Windows WMI watcher NOT RUN |
+| #9 — RUNTIME-HARDENING-001 | `runtime/002-windows-integrity` / `83015186d2e79e1a57b1abf38f75ffa92ad8bc1a` | Clean admission, CLcode-owned commit paths, Windows process-tree cancellation | Runtime-only 11/11 tests pass; actual Windows taskkill tree behavior NOT RUN |
 | #2 — PREPASS-01 | `prepass/01-gptopus-extraction-20261123` / `90b521653d13859f29914dbdb8fc807e342711d0` | GPTopus host-independence archaeology | Source-grounded design/reference |
 | #1 — PREPASS-04 | `prepass/04-windows-desktop-20261123` / `c7f356250fe8ff37bca99c0b6023032e73521aea` | Disposable-Windows bootstrap and first Desktop vertical slice plan | Source-grounded plan; physical run not yet performed |
 
@@ -40,6 +42,8 @@ This file records the current engineering state and evidence boundaries. It is n
 - A reproducible failing fixture generator exists for the first genuine Read → Edit → Test → local commit acceptance task.
 - Control-path surface mapping now exists to rank likely principal-model, auth/quota, engine-process, Desktop IPC, service/update and tool-policy files, including UTF-16 strings and redacted snippets.
 - A guarded surgery layer now exists: exact baseline SHA, exact replacement count, dry-run, external backup, post-write hash verification and receipt-verified rollback.
+- Runtime integrity hardening now requires a clean worktree at admission, commits only files actually edited through CLcode, revalidates touched-file hashes before commit, and uses a Windows process-tree termination plan.
+- A redacted process-launch tracer now exists to catch short-lived Desktop → embedded-engine launches and their parent/child command-line structure without persisting raw credential-bearing arguments.
 - Windows specimen-lab tooling exists to:
   - capture a cryptographic installation baseline;
   - record process/network observations;
@@ -64,7 +68,9 @@ HOSTLESS-RUN-001 has a locally executed deterministic mock-provider test suite c
 - non-blocking service admission/status/events;
 - JSONL request/response behavior.
 
-DESKTOP-CLIENT-001 extends that mechanical proof with process-client and UI-projection behavior, including the terminal-event final-drain race discovered during testing.
+RUNTIME-HARDENING-001 extends the runtime proof with clean-worktree admission, CLcode-touched-path-only commit ownership, touched-file hash revalidation and Windows process-tree termination planning. A runtime-only reconstruction passes **11/11 tests**.
+
+DESKTOP-CLIENT-001 is now explicitly stacked on that hardened runtime. The combined development tree passes **22/22 tests** and includes process-client and UI-projection behavior, including the terminal-event final-drain race discovered during testing.
 
 ### Not yet proved
 
@@ -92,8 +98,8 @@ The standalone Claude Code CLI remains an implementation reference/dependency on
 
 ## Immediate next engineering targets
 
-1. **SPECIMEN-LAUNCH-001:** capture and redact process-creation/command-line evidence for the Desktop→embedded-engine launch boundary.
-2. Run PR #3/#6/#7 self-tests on the disposable PC, then capture the first real specimen baseline/map/runtime observation.
-3. Execute E01/E02/E06 on the physical PC using the already implemented hostless runtime and fixture.
-4. Use the static map + launch/runtime evidence to select the first hash-guarded Desktop surgery experiment.
-5. Connect DESKTOP-CLIENT-001 to the modified Desktop specimen once the engine/frontend control seam is identified.
+1. Run PR #3/#6/#7/#8 self-tests on the disposable PC, then capture the first real specimen baseline, static map, runtime/TCP observation and launch trace.
+2. Execute E01/E02/E06 on the physical PC using the hardened hostless runtime and fixture.
+3. Validate actual Windows process-tree cancellation against a test process with descendants.
+4. Use the static map + runtime + launch evidence to select the first hash-guarded Desktop surgery experiment.
+5. Connect the hardened DESKTOP-CLIENT-001 stack to the modified Desktop specimen once the engine/frontend control seam is identified.
