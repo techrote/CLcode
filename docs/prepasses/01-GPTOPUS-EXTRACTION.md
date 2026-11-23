@@ -2,7 +2,7 @@
 
 **Status:** Source investigation complete; **runtime independence is UNVERIFIED** until the listed live experiments execute.  
 **Date:** 2026-11-23  
-**Target:** independently launched **CLcode desktop application**, no stock Claude modifications, no Claude Code installation/runtime dependency.  
+**Target:** independently launched **CLcode desktop application** with no standalone Claude Code CLI installation/runtime dependency. Desktop Code specimen surgery is a separate, explicitly allowed track on the disposable PC.  
 **CLcode baseline when branched:** `2ba8a3100d046c87cb55e03d3dc985c3ce2cb5ef` (main).  
 **Pinned GPTopus reference:** `849627463c3e2be660f9d24976320b072c107b34`, **exact HEAD** of `ultra/004-integration` when inspected.  
 **Other observed GPTopus refs:** main `edd9392eae931ef19db82c84eb4d6d1167583fc4`; `feature/desktop-openai-workers-mcpb` `04f570d130eeed47f50c6353829f9bffccd33604`. Comparison reports main **78 commits behind**, feature **54 commits behind**, and **zero ahead** of the pinned commit. Consequently neither is a newer replacement for this analysis. Do not silently switch to main.  
@@ -57,7 +57,7 @@ node --version
 node C:\dev\Chlaude-GPTopus\plugins\openai-workers\scripts\oai-config.mjs --no-open
 ```
 
-The final command is **an E01 procedure, not an observed PASS**. Do not publish its localhost token-bearing URL. On the disposable PC use dedicated nonsecret state/config directories (e.g. `OAI_CONFIG_STORE`, `OAI_CONFIG_STATE_DIR`, `OPENAI_WORKER_USAGE_DIR`) instead of touching existing Claude user-level settings; keep keys out of repo and logs. The stock Claude installation remains untouched.
+The final command is **an E01 procedure, not an observed PASS**. Do not publish its localhost token-bearing URL. On the disposable PC use dedicated nonsecret state/config directories (e.g. `OAI_CONFIG_STORE`, `OAI_CONFIG_STATE_DIR`, `OPENAI_WORKER_USAGE_DIR`) so the experiment is reproducible and easy to reset; keep keys out of repo and logs.
 
 ## 2. `/oai:run` call graph
 
@@ -153,13 +153,13 @@ node scripts/oai-config.mjs --no-open [--port N] [--idle-minutes N]
 
 **References:** `scripts/oai-config.mjs` lines **32–76, 87–188, 189–299, 301–342**; `scripts/oai-ws.mjs::acceptUpgrade` lines **41–70**; `bridge/convo.mjs` lines **30–40, 102–185, 203–245**; `scripts/oai-config-core.mjs` lines **145–260, 264–326, 330–491**.
 
-`oai-config-core.mjs` exports schema/validation (`PARAMS`, `normalizeValue`, `validateConfig`, `effectiveConfig`), `memoryStore`, `jsonStore`, `windowsUserStore`, `defaultStore`, `stateDir` and `applyChanges`. Defaults: Windows config in **HKCU\Environment** via PowerShell and state in `LOCALAPPDATA\ClaudeOpenAIWorkers`; `OAI_CONFIG_STORE` forces a JSON config store, `OAI_CONFIG_STATE_DIR` forces UI state location. These directory names are historic; CLcode should set its **own isolated paths**, not reuse stock Claude settings by accident. `liveState()` reads configured key **presence**, usage, traces and presets; it does not issue a provider request.
+`oai-config-core.mjs` exports schema/validation (`PARAMS`, `normalizeValue`, `validateConfig`, `effectiveConfig`), `memoryStore`, `jsonStore`, `windowsUserStore`, `defaultStore`, `stateDir` and `applyChanges`. Defaults: Windows config in **HKCU\Environment** via PowerShell and state in `LOCALAPPDATA\ClaudeOpenAIWorkers`; `OAI_CONFIG_STORE` forces a JSON config store, `OAI_CONFIG_STATE_DIR` forces UI state location. These directory names are historic; CLcode should set its **own isolated paths** for reproducibility and clean ownership of state. `liveState()` reads configured key **presence**, usage, traces and presets; it does not issue a provider request.
 
 Important control-plane caveat: `baseEnv(store.read(...), env)` is constructed for panel snapshots, steering and conversation views. It **does not magically change an already-running bridge process's `process.env`**. Settings changes are tracked as pending/restart; the CLcode supervisor needs an explicit, consistent configuration snapshot/reload boundary. No localhost endpoint for **spawn**, **status of direct runs**, or **cancel** is implemented by `createConfigServer`. The existing WebSocket tip field only targets `steer.listRuns` entries; it cannot launch them.
 
 `bridge/convo.mjs` persists editable conversations under `<usage directory>/conversations` (or `OAI_CONVO_DIR`), one JSON file per conversation, with lock/revision/trim handling and pending streamed previews. Preserve its logic; do not introduce a second chat history writer.
 
-**UNVERIFIED:** E01 actual Windows launch, authenticated UI, restart, settings persistence, and safe isolation from a stock Claude installation.
+**UNVERIFIED:** E01 actual Windows launch, authenticated UI, restart, settings persistence, and reproducible isolation of CLcode-owned state.
 
 ## 4. Host subagents versus independent ULTRA orchestration
 
@@ -271,7 +271,7 @@ For permissions reuse `ultra/permissions.mjs::PermissionBoundary` where it direc
 | **A — independent but governed** | `ultra/cli.mjs`; `ultra/service.mjs::createService/UltraService`; `ultra/broker.mjs`; `ultra/runtime.mjs::tick/step`; `ultra/store.mjs`; `ultra/permissions.mjs` | Preserve; not a turnkey generic provider coding agent; owner opt-in and approval unchanged |
 | **B — small entry adapter** | `hooks/register.js` command `oai:run`/`oai:s` into bridge `run/steer` | CLcode local API/CLI instead of host `command.run` / `$.mcp.call` |
 | **B — state and conversation adapter** | `hooks/step.js::newRun/nextInput/responseStep`, `hooks/register.js::withSteering`, `steer.upsertRun/takeTips` | Supply CLcode-owned transcript/step state, tool results and active agent IDs; do **not** clone a complete host transcript system |
-| **B — supervisor-facing settings** | `oai-config-core.mjs::defaultStore/applyChanges`; `workerSettings` | Isolated CLcode state and coherent env snapshot on spawn/reload; no mutating stock Claude |
+| **B — supervisor-facing settings** | `oai-config-core.mjs::defaultStore/applyChanges`; `workerSettings` | CLcode-owned state and coherent env snapshot on spawn/reload |
 | **B — tool-schema adapter** | `hooks/tools.js::OPENAI_TOOLS/filterToolArgs` | Execute authorized tools with CLcode-owned scoped filesystem/process adapter |
 | **C — Claude host service** | `$.agent.register/list`, `on('agent.spawn')`, `next(e)`, host `Agent`/`SubagentHandback` | **Replace** actual agent ownership and handback with supervisor state, not a mock host |
 | **C — Claude step/session** | `on('session.start')`, `on('turn.start/step/complete')`; `$.session.messages/cwd/info/id/model/version/surfaces`; `$.state.get/set`; host `turnId/index`/stream signal | **Replace** scheduling, run state, transcript and cancellation source |
@@ -329,7 +329,7 @@ Do **not** try to turn `oai-config.mjs` into the process owner. Its UI/WS can be
 
 1. A checkout at the **pinned GPTopus SHA**, Node >=20.11.0, and a long-lived Node process importing `bridge/server.mjs::dispatch`. No Claude hooks, `Agent` tool, MCP client or Anthropic inference token is required for this call.
 2. A configured **valid worker/model** in `bridge/workers.mjs`. For local `lmstudio`, the matching local model must be loaded and the service reachable at its allowed URL; for NVIDIA, a scoped NVIDIA API key, permitted endpoint and remote account access; for OpenAI, scoped paid/free key, route eligibility, known price/budget, and live API availability.
-3. A consistent environment including isolated `OPENAI_WORKER_USAGE_DIR` and selected `OPENAI_WORKER_*`/`OAI_*` settings, with appropriate config-store/restart handling. No stock Claude user environment edits.
+3. A consistent environment including isolated `OPENAI_WORKER_USAGE_DIR` and selected `OPENAI_WORKER_*`/`OAI_*` settings, with appropriate config-store/restart handling and all experimental environment edits recorded.
 4. A call to `dispatch('create',{worker_type,model,input,instructions,tools:[]})` (or existing `dispatch('run',{args:'worker task'})`), followed by `poll` as required. Check actual returned `status` and `text`, process logs and usage; reassemble `paged` outputs if applicable.
 5. A bound timeout, error and accounting inspection. Do **not** infer “no Anthropic calls” from lack of application log entries; for E08 use observed network/process evidence on the disposable PC.
 
@@ -358,7 +358,7 @@ Do **not** try to turn `oai-config.mjs` into the process owner. Its UI/WS can be
 - **Responses are billable and retries are hazardous.** Reuse `usage.mjs`/`server.mjs` reservation/identity checks; retain ambiguous spend, never automatically duplicate a POST.
 - **Provider streaming and OpenAI background responses have different restart/cancel semantics.** Surface unknown states honestly. Guard long polls and stale UI status.
 - **Tool schema is not a tool executor.** Do not pass E06 on a mocked `Read` result, an artificial edit, or a stage-only patch that never reaches an actual fixture/test.
-- **No CI/VM/tooling expansion** until a physical Windows demonstration gives a reason. Do not alter GPTopus or stock Claude for this extraction.
+- **No CI/VM/tooling expansion** until a physical Windows demonstration gives a reason. Keep GPTopus source changes out of this extraction unless a proved dependency requires them; Desktop specimen modification belongs to the parallel Desktop track.
 
 ### Evidence ledger
 
@@ -387,7 +387,7 @@ The **CLcode repository currently contains only planning/documentation**. Paths 
 - `e02-smoke.mjs` is an **explicit live opt-in**: user-selected valid configured worker, minimal task, genuine provider create/poll and a recorded final status/usage; reassemble paged response. No secrets printed, no automatic retries of ambiguous POST. For NVIDIA/LM Studio use existing Chat adapter, not an OpenAI-shaped handcoded endpoint.
 - Provide the E01 Windows command above as a manual reproduction (do not fold UI source into CLcode). In `docs/EXPERIMENTS.md` *later*, evidence can be recorded by the implementing agent; **this prepass does not edit that document**.
 
-**Acceptance:** real E02 inference can be run with **Claude Code not installed/running**, with exact GPTopus SHA, process, model and source of usage recorded. A fully mocked response **does not pass** E02; if credentials/model unavailable report **UNVERIFIED** and exact blocker. No Anthropic key/call required. No GPTopus/stock Claude files changed.
+**Acceptance:** real E02 inference can be run with **Claude Code not installed/running**, with exact GPTopus SHA, process, model and source of usage recorded. A fully mocked response **does not pass** E02; if credentials/model unavailable report **UNVERIFIED** and exact blocker. No Anthropic key/call required. No upstream GPTopus files need be changed for this proof.
 
 ### Task 2 — **CLCODE-RUN-OWNER-001: actual spawn/status/cancel/results (E03/E04 core)**
 
