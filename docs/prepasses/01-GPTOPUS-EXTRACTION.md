@@ -354,7 +354,7 @@ Do **not** try to turn `oai-config.mjs` into the process owner. Its UI/WS can be
 - **ULTRA native `admit` does not spawn a worker.** Only host `next(e)` does. The independent `UltraRuntime` does spawn/tick admitted broker jobs **after** recruiting and granting permission; that is a distinct path.
 - **ULTRA independent runtime is OpenAI-oriented and has staged-file tools**, not a substitute for CLcode's needed non-Claude principal+scoped live Edit/Test loop.
 - **Raw MCP `run` authority and `@path` reads need confinement.** Never expose a public port, route model tool calls to raw `run`, or allow prompt-controlled arbitrary file attachments.
-- **Config writes need process-env alignment.** On Windows prefer dedicated JSON state to avoid writing stock `HKCU\Environment`. A UI slider change is not a live bridge reconfiguration.
+- **Config writes need process-env alignment.** On Windows prefer dedicated JSON state to avoid unnecessary global `HKCU\Environment` writes. A UI slider change is not a live bridge reconfiguration.
 - **Responses are billable and retries are hazardous.** Reuse `usage.mjs`/`server.mjs` reservation/identity checks; retain ambiguous spend, never automatically duplicate a POST.
 - **Provider streaming and OpenAI background responses have different restart/cancel semantics.** Surface unknown states honestly. Guard long polls and stale UI status.
 - **Tool schema is not a tool executor.** Do not pass E06 on a mocked `Read` result, an artificial edit, or a stage-only patch that never reaches an actual fixture/test.
