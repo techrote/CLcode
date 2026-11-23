@@ -8,7 +8,6 @@ CLcode is an exploratory project to preserve and improve the useful *Claude Desk
 
 ## Project decisions
 
-- **Leave stock Claude and stock Claude Desktop untouched.** CLcode is a separate project and application. Do not alter the owner's working installation.
 - **Start with GitHub + a physically disposable Windows development PC.** It presently has no Claude Code installation. No VM programme until feasibility is demonstrated.
 - **Reuse, where feasible, the provider/worker infrastructure already developed in [Chlaude-GPTopus](https://github.com/techrote/Chlaude-GPTopus).** Keep GPTopus independently usable; do not transplant its changing branches without pinning a tested revision.
 - **Explore an independent web control plane.** GPTopus already offers local configuration and steering of existing workers. Starting new runs, orchestrating fleets, and continuing work while a Claude quota is exhausted are hypotheses requiring direct tests, not established capabilities.
