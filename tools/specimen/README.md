@@ -69,7 +69,38 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\specimen\Observe-Spe
 
 The observer samples process ancestry and established TCP connections for matching Claude/Anthropic processes and descendants of the optionally launched root process. It records endpoint IP/port and executable paths; it intentionally does **not** collect cookies, request bodies, auth headers or command-line arguments.
 
-## 4. Capture after one modification and compare
+## 4. Map likely control surfaces
+
+After the baseline exists, run the read-only control-path mapper before changing the specimen:
+
+```powershell
+$mapRoot = Join-Path $env:USERPROFILE 'clcode-specimen-lab\maps\desktop-baseline'
+node .\tools\specimen\Scan-SpecimenSurface.mjs `
+  --root 'C:\Path\To\Pinned\Desktop\Install' `
+  --out $mapRoot
+
+node .\tools\specimen\Summarize-SpecimenMap.mjs `
+  (Join-Path $mapRoot 'map.json')
+```
+
+Then correlate the map with a runtime observation:
+
+```powershell
+node .\tools\specimen\Analyze-RuntimeObservation.mjs `
+  'C:\Users\YOU\clcode-specimen-lab\observations\runtime-...' `
+  (Join-Path $mapRoot 'map.json')
+```
+
+See [SPECIMEN-MAP-001](../../docs/SPECIMEN-MAP-001.md) for the category catalog, outputs and evidence rules. The scanner copies no specimen files and redacts credential-like snippets.
+
+Before using the mapper against the real specimen:
+
+```powershell
+node .\tools\specimen\Test-SpecimenMap.mjs
+node .\tools\specimen\Test-RuntimeAnalysis.mjs
+```
+
+## 5. Capture after one modification and compare
 
 ```powershell
 # after the bounded local specimen change
