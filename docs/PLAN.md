@@ -8,11 +8,11 @@
 **Initial execution environment:** separate disposable Windows development PC + GitHub.  
 **Target product:** CLcode **desktop application**, modeled on the productive aspects of the *Claude Desktop Code* experience, with independent model inference and agent execution.
 
-> **Non-negotiable distinction:** the existing stock Claude Desktop installation remains untouched. CLcode does not aim to ship a modified Claude Code CLI. A CLI or local service may exist as an implementation detail, but the product to evaluate and ultimately use is the graphical desktop Code workspace.
+> **Non-negotiable distinction:** CLcode targets the **graphical Desktop Code application**, not the standalone Claude Code CLI. Development occurs on a separate disposable Windows PC, and the pinned Desktop Code specimen there may be modified invasively as required. A CLI or local service may exist only as an implementation detail.
 
 ## Contents
 
-1. [Vision and boundaries](#1-vision-and-boundaries) — what CLcode should become, what it must not disturb, and what is explicitly out of scope.
+1. [Vision and boundaries](#1-vision-and-boundaries) — what CLcode should become, what may be modified, and what is explicitly out of scope.
 2. [What already exists and what remains unproved](#2-what-already-exists-and-what-remains-unproved) — GPTopus control paths, direct runs, independent panel and quota assumptions.
 3. [Target architecture](#3-target-architecture) — desktop shell, agent runtime, provider routing, control plane and host capability boundaries.
 4. [Development strategy](#4-development-strategy) — GitHub/disposable-PC sequence, provenance, legal constraints and restraint on infrastructure.
@@ -36,7 +36,7 @@ GPTopus should provide or inspire the model/provider and agent control plane, no
 
 ### Invariants
 
-- **Do not modify stock Claude Desktop or its local data.** Its installation and configuration remain a known-good reference.
+- **The disposable Desktop Code specimen is intentionally modifiable.** Replacing Claude as principal orchestrator, removing Anthropic authentication/quota/service dependencies, and deleting obstructive workflow policy are valid research operations when they advance the desktop product goal.
 - **Desktop is the product.** Do not silently redefine success as a shell command, web configuration page, or headless orchestration demo.
 - **Start on physically disposable Windows hardware.** The owner will use a separate PC with no valuable disk state; no VM setup now.
 - **Keep GPTopus separately maintainable.** Share interfaces and bounded components; avoid cross-repo code duplication until necessary.
@@ -139,9 +139,9 @@ The second is strategically more important. The product should not rely on a loo
 | --- | --- |
 | GPTopus provider profiles, quotas, keys and model routing | **ADAPT** through explicit interfaces |
 | GPTopus Colourway/settings deck, traces and conversation steering | **KEEP/EXTEND** as an operator control surface |
-| Claude Desktop Code UI/workflows | **REFERENCE / REIMPLEMENT or ADAPT** within applicable license and technical constraints |
+| Claude Desktop Code UI/workflows | **ADAPT / MODIFY DEEPLY** on the pinned specimen; reimplement only where transplanting a component is unsustainable or non-distributable |
 | Anthropic model invocation and account-based inference dependency | **REPLACE** with independently authorized providers |
-| Claude Code native hooks, tools and subagent host API | **INVESTIGATE** and substitute independent equivalents as needed |
+| Claude Code native hooks, tools and subagent host API | **INVESTIGATE / MODIFY / SUBSTITUTE** as required to remove Claude as principal controller while preserving useful tool behavior |
 | Session/context management, project navigation, permissions, diffs | **PRESERVE BEHAVIOR** where valuable; implement independently if necessary |
 | Intrusive repeated confirmations or overbroad provider coupling | **REDESIGN** without removing genuine host boundaries |
 | Claude Code CLI interface | **NOT THE PRODUCT**; may be used only for component archaeology |
@@ -150,15 +150,15 @@ The second is strategically more important. The product should not rely on a loo
 
 ### Hardware and GitHub arrangement
 
-Use [this repository](https://github.com/techrote/CLcode) for the CLcode plan, experiments and eventual CLcode-owned source. A separate disposable Windows development PC is the initial execution/GUI test target, initially **without Claude Code installed**. Stock Claude Desktop on the owner's main computer is not to be touched.
+Use [this repository](https://github.com/techrote/CLcode) for the CLcode plan, experiments and eventual CLcode-owned source. A separate disposable Windows development PC is the initial execution/GUI test target, initially **without Claude Code installed**. That machine is the destructive research boundary for Desktop Code transplantation and may be reset or rebuilt freely.
 
 Use a small fixture project for early edits. The disposable PC may be reset without losing source, but **credentials are still valuable**: never copy a main account's unbounded tokens or secrets, use narrowly scoped short-lived GitHub credentials when needed, and do not commit local access-token URLs or browser settings dumps.
 
 ### Host specimen / code provenance
 
-If inspecting or running a specific Claude Desktop release becomes necessary, pin the exact release/version/hash and record it in the experiment log. Use a separately installed specimen only on the disposable PC. Observe the app's actual Desktop Code dependency structure rather than assuming the desktop is simply the CLI.
+When Desktop work begins, pin the exact release/version/hash and record it in the experiment log. Install the specimen on the disposable PC, observe the app's actual Desktop Code dependency structure rather than assuming the desktop is simply the CLI, and permit invasive local modification where required to take control of model selection, orchestration, tools, sessions and workflow policy.
 
-Anthropic's application is proprietary. CLcode must distinguish privately evaluated compatibility experiments from source it can lawfully publish, distribute, or incorporate. Favor documented interfaces and independently written replacements. If source reuse or binary modification is not legally or operationally viable, preserve the same user-facing product target and build a clean-room desktop shell. Do not embed a proprietary executable in this public repository by default.
+Anthropic's application is proprietary. CLcode must distinguish private research modification from source or binaries it can lawfully publish, distribute or incorporate. Do not avoid necessary local specimen surgery merely to preserve the vendor implementation. If a proprietary component cannot be redistributed, keep that artifact out of the public repository and use the research result to implement or substitute the distributable CLcode-owned equivalent.
 
 ### Engineering discipline
 
@@ -173,11 +173,11 @@ Anthropic's application is proprietary. CLcode must distinguish privately evalua
 
 ### M0 — Prepare the research substrate
 
-**Goal:** establish a reproducible workspace without installing or modifying stock Claude.
+**Goal:** establish a reproducible disposable-PC workspace for GPTopus extraction and later Desktop Code specimen surgery.
 
 Deliverables: CLcode plan, a disposable PC with a clean working directory, GitHub clone, temporary fixture repository, Node runtime for GPTopus experiments, documented tool versions and restricted provider test credentials.
 
-**Gate:** reconstruct the environment from documented commands without accessing the owner's main-machine Claude installation. No VM, no workflow matrix.
+**Gate:** reconstruct the environment from documented commands on the disposable PC. No VM, no workflow matrix.
 
 ### M1 — Independent GPTopus configuration/control-panel proof
 
@@ -207,7 +207,7 @@ Test one end-to-end task against a fixture Git repository: inspect/read a file, 
 
 **Goal:** demonstrate the workflow **inside an interactive desktop Code workspace**, not just a script or web dashboard.
 
-Evaluate whether a separate pinned desktop specimen can be adapted at a stable seam, or whether an independently implemented desktop shell is the more viable route. Retain project navigation, session state, tool visibility and diffs. Connect the independent runtime and provider router. Compare the ergonomics with stock Claude Desktop on fixture tasks without touching the stock installation.
+Start from a pinned Desktop Code specimen and modify it as deeply as required to make the non-Claude principal model the effective "CEO" of the desktop coding loop. Retain valuable project navigation, session state, tool visibility, diffs and other host behavior while replacing Anthropic model-control, authentication/quota dependencies and obstructive workflow policy. Move to an independently implemented shell only if specimen transplantation proves technically or legally untenable.
 
 **Gate:** a user launches CLcode, selects a non-Claude principal model, submits a coding task through the desktop UI, watches genuine tool execution, reviews the diff/test result and completes the task. No Anthropic inference calls and no Claude Code CLI installation/runtime prerequisite. Installation must be independently reproducible on the disposable PC.
 
@@ -215,10 +215,10 @@ Evaluate whether a separate pinned desktop specimen can be adapted at a stable s
 
 On evidence from M4, choose one of:
 
-1. **GO — adapt stable desktop interfaces:** compatibility costs and licensing permit sustained development.
-2. **GO — clean-room desktop:** preserve useful Desktop UX while building a stand-alone shell over the proved runtime.
+1. **GO — specimen transplant:** continue deep modification of the pinned Desktop Code specimen and progressively replace non-distributable dependencies with CLcode-owned components.
+2. **GO — independent desktop fallback:** only if specimen transplantation is unsustainable, preserve the proved UX/runtime behavior in a stand-alone CLcode shell.
 3. **HOLD — backend useful, desktop unproved:** retain the GPTopus improvements and revisit UI architecture.
-4. **STOP — unacceptable restrictions or economics:** archive experiments without disturbing stock Claude or GPTopus.
+4. **STOP — unacceptable restrictions or economics:** archive the CLcode path without disturbing GPTopus.
 
 Only after a GO decision: increase tool breadth, improve multi-agent orchestration, add package distribution, consider more formal testing and investigate VM-based containment.
 
@@ -245,7 +245,7 @@ Never infer success from green unit tests, a working configuration panel or a su
 
 | Risk | Why it matters | Decision / mitigation |
 | --- | --- | --- |
-| **Desktop is not separable from proprietary Claude runtime** | May be impossible to transplant legally or sustainably | Prove seams first; maintain clean-room desktop alternative; do not commit Anthropic code |
+| **Desktop is not separable from proprietary Claude runtime** | Deep transplant may be technically viable for research but impossible to distribute sustainably | Use specimen surgery to map the boundary precisely; keep proprietary artifacts out of public source and reimplement only components that cannot be shipped |
 | **Steering exists but no independent spawn** | A web panel may only influence already-running Claude-hosted workers | M2 requires standalone run creation and ownership |
 | **Quota-gate coupling** | Host might refuse slash command dispatch during quota exhaustion | Measure separately; independent CLcode controller must not rely on this |
 | **Provider tool semantics differ** | Reasoning, calls, streaming, context and continuation vary | Canonical agent protocol + per-provider adapters; test at least one full tool loop |
@@ -266,7 +266,7 @@ These are opportunities, not justification to delay the first concrete desktop p
 
 ## 9. Immediate next actions
 
-1. Keep this plan as the baseline and prepare the disposable PC; **do not install or modify the stock Claude installation** on the main machine.
+1. Keep this plan as the baseline and prepare the disposable PC as the sole destructive Desktop Code research machine.
 2. Identify/pin the actual GPTopus revision containing the working config panel, providers, steering and direct-run path. Verify that it can be checked out and launched on the disposable PC without Claude Code.
 3. Perform **E01** and record the observable result. No new CI or VM system.
 4. Examine which run-creation/orchestration paths still depend on Claude's `command.run`, native tool hooks and session lifecycle. Specify the minimum independent control API; avoid rewriting the working provider client unnecessarily.
