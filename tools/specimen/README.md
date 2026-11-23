@@ -2,6 +2,14 @@
 
 This directory contains **repository-owned tooling for the disposable Windows development PC**. It prepares evidence for Desktop Code transplantation without committing the vendor specimen, its user data, or captured runtime state to Git.
 
+Before using the lab against the real specimen, run the local self-test:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\specimen\Test-SpecimenTooling.ps1
+```
+
+It parses all specimen PowerShell files and exercises capture → experiment ledger → modified capture → comparison against a synthetic fake installation. No CI or vendor installation is required.
+
 The intended sequence is deliberately specimen-first:
 
 1. install/pin the target Desktop Code specimen on the disposable PC;
