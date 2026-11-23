@@ -100,3 +100,15 @@ node .\src\cli.mjs cancel RUN_ID --state "$env:USERPROFILE\clcode-lab\state"
 ```
 
 A live pass requires the real provider request IDs, tool-event chronology, `node --test` exit code, actual Git diff and local commit SHA to be recorded in `docs/EXPERIMENTS.md`. CI or mock success must not be substituted for that evidence.
+
+
+## Runtime integrity hardening
+
+The follow-on [RUNTIME-HARDENING-001](RUNTIME-HARDENING-001.md) tightens the E06 path before physical Windows acceptance:
+
+- agent admission requires a clean Git worktree;
+- local commit includes only files edited through CLcode;
+- touched files are SHA-256 revalidated before commit;
+- Windows cancellation uses a process-tree termination plan rather than assuming the immediate test process is the whole workload.
+
+These invariants are mechanically tested but still require actual Windows validation.
