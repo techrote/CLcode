@@ -30,7 +30,7 @@ if ($LaunchPath) {
 
 $processSamples = New-Object System.Collections.Generic.List[object]
 $connectionSamples = New-Object System.Collections.Generic.List[object]
-$seenPids = New-Object 'System.Collections.Generic.HashSet[int]'
+$seenPids = @{}
 
 function Get-AllProcesses {
     try { return @(Get-CimInstance Win32_Process) } catch { return @() }
@@ -38,20 +38,22 @@ function Get-AllProcesses {
 
 function Get-WatchedPids {
     param([object[]]$Processes, [Nullable[int]]$RootPid)
-    $ids = New-Object 'System.Collections.Generic.HashSet[int]'
+    $ids = @{}
     foreach ($p in $Processes) {
         if ($p.Name -match $ProcessNameRegex -or $p.ExecutablePath -match $ProcessNameRegex) {
-            [void]$ids.Add([int]$p.ProcessId)
+            $ids[[int]$p.ProcessId] = $true
         }
     }
-    if ($RootPid.HasValue) { [void]$ids.Add($RootPid.Value) }
+    if ($RootPid.HasValue) { $ids[$RootPid.Value] = $true }
 
     $changed = $true
     while ($changed) {
         $changed = $false
         foreach ($p in $Processes) {
-            if ($ids.Contains([int]$p.ParentProcessId) -and -not $ids.Contains([int]$p.ProcessId)) {
-                [void]$ids.Add([int]$p.ProcessId)
+            $pid = [int]$p.ProcessId
+            $parent = [int]$p.ParentProcessId
+            if ($ids.ContainsKey($parent) -and -not $ids.ContainsKey($pid)) {
+                $ids[$pid] = $true
                 $changed = $true
             }
         }
@@ -70,8 +72,8 @@ try {
         $watched = Get-WatchedPids -Processes $procs -RootPid $rootPid
 
         foreach ($p in $procs) {
-            if (-not $watched.Contains([int]$p.ProcessId)) { continue }
-            [void]$seenPids.Add([int]$p.ProcessId)
+            if (-not $watched.ContainsKey([int]$p.ProcessId)) { continue }
+            $seenPids[[int]$p.ProcessId] = $true
             $processSamples.Add([PSCustomObject]@{
                 TimestampUtc = $now
                 ProcessId = $p.ProcessId
@@ -84,7 +86,7 @@ try {
         if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) {
             try {
                 Get-NetTCPConnection -State Established -ErrorAction Stop | Where-Object {
-                    $watched.Contains([int]$_.OwningProcess)
+                    $watched.ContainsKey([int]$_.OwningProcess)
                 } | ForEach-Object {
                     $connectionSamples.Add([PSCustomObject]@{
                         TimestampUtc = $now
@@ -125,7 +127,7 @@ $summary = [ordered]@{
     processNameRegex = $ProcessNameRegex
     launchedPath = $LaunchPath
     launchedProcessId = if ($launched) { $launched.Id } else { $null }
-    uniqueProcessIds = @($seenPids)
+    uniqueProcessIds = @($seenPids.Keys | Sort-Object)
     processSampleCount = $processSamples.Count
     connectionSampleCount = $connectionSamples.Count
     processCsv = 'process-samples.csv'
