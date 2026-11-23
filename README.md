@@ -8,8 +8,9 @@ CLcode is an exploratory project to preserve and improve the useful *Claude Desk
 
 ## Project decisions
 
-- **Start with GitHub + a physically disposable Windows development PC.** It presently has no Claude Code installation. No VM programme until feasibility is demonstrated.
+- **Start with GitHub + a physically disposable Windows development PC.** It presently has no Claude Code installation. No VM programme until feasibility is demonstrated. This machine is the destructive research boundary: the Desktop Code specimen may be modified, broken, reinstalled or replaced as needed.
 - **Reuse, where feasible, the provider/worker infrastructure already developed in [Chlaude-GPTopus](https://github.com/techrote/Chlaude-GPTopus).** Keep GPTopus independently usable; do not transplant its changing branches without pinning a tested revision.
+- **Expect deep Desktop Code modification.** CLcode is not limited to supported extension seams: replacing Claude as the principal/"CEO" model, removing Anthropic account/quota/service coupling, and stripping workflow restrictions may require invasive changes to a pinned Desktop Code specimen. The product target remains the desktop app, not the CLI.
 - **Explore an independent web control plane.** GPTopus already offers local configuration and steering of existing workers. Starting new runs, orchestrating fleets, and continuing work while a Claude quota is exhausted are hypotheses requiring direct tests, not established capabilities.
 - **Use other providers' own credentials and entitlements.** The goal is independence from Anthropic inference, not evasion of Anthropic billing, licensing, or access rules.
 - **Preserve external safety boundaries.** Disposable hardware does not make GitHub credentials, model API keys, or external side effects disposable.
