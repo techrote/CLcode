@@ -3,7 +3,8 @@
 param(
     [string]$LabRoot = (Join-Path $env:USERPROFILE 'clcode-specimen-lab'),
     [string[]]$InstallRoot,
-    [switch]$SkipFileHashes
+    [switch]$SkipFileHashes,
+    [switch]$DisableAutoDiscovery
 )
 
 Set-StrictMode -Version Latest
@@ -22,41 +23,44 @@ function Get-CommandVersion {
 }
 
 function Resolve-SpecimenRoots {
-    param([string[]]$ExplicitRoots)
+    param([string[]]$ExplicitRoots, [switch]$NoAutoDiscovery)
     $roots = New-Object System.Collections.Generic.List[string]
 
     foreach ($candidate in @($ExplicitRoots)) {
         if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Container)) {
-            $roots.Add([IO.Path]::GetFullPath($candidate).TrimEnd('\'))
+            $roots.Add([IO.Path]::GetFullPath($candidate).TrimEnd([IO.Path]::DirectorySeparatorChar))
         }
     }
 
-    if (Get-Command Get-AppxPackage -ErrorAction SilentlyContinue) {
-        try {
-            Get-AppxPackage | Where-Object {
-                $_.Name -match '(?i)claude|anthropic' -or
-                $_.PackageFamilyName -match '(?i)claude|anthropic' -or
-                $_.Publisher -match '(?i)anthropic'
-            } | ForEach-Object {
-                if ($_.InstallLocation -and (Test-Path -LiteralPath $_.InstallLocation -PathType Container)) {
-                    $roots.Add([IO.Path]::GetFullPath($_.InstallLocation).TrimEnd('\'))
+    if (-not $NoAutoDiscovery) {
+        if (Get-Command Get-AppxPackage -ErrorAction SilentlyContinue) {
+            try {
+                Get-AppxPackage | Where-Object {
+                    $_.Name -match '(?i)claude|anthropic' -or
+                    $_.PackageFamilyName -match '(?i)claude|anthropic' -or
+                    $_.Publisher -match '(?i)anthropic'
+                } | ForEach-Object {
+                    if ($_.InstallLocation -and (Test-Path -LiteralPath $_.InstallLocation -PathType Container)) {
+                        $roots.Add([IO.Path]::GetFullPath($_.InstallLocation).TrimEnd([IO.Path]::DirectorySeparatorChar))
+                    }
                 }
-            }
-        } catch {}
-    }
-
-    $common = @(
-        (Join-Path $env:LOCALAPPDATA 'Programs\Claude'),
-        (Join-Path $env:LOCALAPPDATA 'Claude'),
-        (Join-Path $env:LOCALAPPDATA 'AnthropicClaude'),
-        (Join-Path $env:ProgramFiles 'Claude')
-    )
-    if (${env:ProgramFiles(x86)}) { $common += (Join-Path ${env:ProgramFiles(x86)} 'Claude') }
-
-    foreach ($candidate in $common) {
-        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Container)) {
-            $roots.Add([IO.Path]::GetFullPath($candidate).TrimEnd('\'))
+            } catch {}
         }
+
+        $common = @(
+            (Join-Path $env:LOCALAPPDATA 'Programs\Claude'),
+            (Join-Path $env:LOCALAPPDATA 'Claude'),
+            (Join-Path $env:LOCALAPPDATA 'AnthropicClaude'),
+            (Join-Path $env:ProgramFiles 'Claude')
+        )
+        if (${env:ProgramFiles(x86)}) { $common += (Join-Path ${env:ProgramFiles(x86)} 'Claude') }
+
+        foreach ($candidate in $common) {
+            if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Container)) {
+                $roots.Add([IO.Path]::GetFullPath($candidate).TrimEnd([IO.Path]::DirectorySeparatorChar))
+            }
+        }
+
     }
 
     return @($roots | Select-Object -Unique)
@@ -100,9 +104,9 @@ function Get-SpecimenProcesses {
 
 function Get-FileRows {
     param([Parameter(Mandatory=$true)][string]$Root, [switch]$NoHash)
-    $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\')
+    $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd([IO.Path]::DirectorySeparatorChar)
     Get-ChildItem -LiteralPath $rootFull -Recurse -File -Force -ErrorAction SilentlyContinue | ForEach-Object {
-        $relative = $_.FullName.Substring($rootFull.Length).TrimStart('\')
+        $relative = $_.FullName.Substring($rootFull.Length).TrimStart([IO.Path]::DirectorySeparatorChar)
         $hash = $null
         $hashError = $null
         if (-not $NoHash) {
@@ -127,7 +131,7 @@ $captureId = 'baseline-{0}-{1}' -f $stamp, ([Guid]::NewGuid().ToString('N').Subs
 $out = Join-Path $captures $captureId
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-$roots = @(Resolve-SpecimenRoots -ExplicitRoots $InstallRoot)
+$roots = @(Resolve-SpecimenRoots -ExplicitRoots $InstallRoot -NoAutoDiscovery:$DisableAutoDiscovery)
 $packages = @(Get-AppPackages)
 $processes = @(Get-SpecimenProcesses)
 
