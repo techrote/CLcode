@@ -66,7 +66,12 @@ $changes = foreach ($key in $allKeys) {
     }
 }
 $changes = @($changes)
-$changes | Export-Csv -LiteralPath (Join-Path $OutputDirectory 'file-changes.csv') -NoTypeInformation -Encoding UTF8
+$changesCsv = Join-Path $OutputDirectory 'file-changes.csv'
+if ($changes.Count) {
+    $changes | Export-Csv -LiteralPath $changesCsv -NoTypeInformation -Encoding UTF8
+} else {
+    'Change,Root,RelativePath,BeforeLength,AfterLength,BeforeSHA256,AfterSHA256' | Set-Content -LiteralPath $changesCsv -Encoding UTF8
+}
 
 $summary = [ordered]@{
     schemaVersion = 1
