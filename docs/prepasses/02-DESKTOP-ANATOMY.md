@@ -163,11 +163,11 @@ Proposed event types: run.started, model.requested, model.delta, tool.requested,
 | **Desktop 3P gateway** | Gateway must implement **POST /v1/messages** including **streaming and tool use**; **GET /v1/models** is optional. [Official specification](https://claude.com/docs/third-party/claude-desktop/gateway). | Useful **compatibility probe only**. It does not offer agent runtime ownership, renderer extraction, or guaranteed non-Claude support. |
 | **Model discovery/aliases** | Automatic model discovery only lists recognizable Claude identifiers. Explicit **inferenceModels** and **behavesAs** can configure aliases/tier semantics with version-dependent behavior. [Gateway model docs](https://claude.com/docs/third-party/claude-desktop/gateway#models). | An unknown model ID can be listed, but **display in picker is not proof of valid reasoning/tool/stream/compaction semantics**. |
 | **Claude Code gateway support policy** | Explicit statement that non-Claude routing is **not supported through any gateway**. [Official gateways](https://code.claude.com/docs/en/gateways). | A translated Qwen/GPT/KAT gateway experiment is unsupported; **do not** make it a CLcode prerequisite. |
-| **Desktop third-party configuration** | 3P configuration keys passed through launch options/env or managed settings; Windows location includes **%LOCALAPPDATA%/Claude-3p/configLibrary** for configured 3P profile. [Code propagation](https://claude.com/docs/third-party/claude-desktop/code); [config format](https://claude.com/docs/third-party/claude-desktop/configuration-format). | A supported *configuration* seam, not a backend replacement or window hosting contract. Leave the stock profile untouched. |
+| **Desktop third-party configuration** | 3P configuration keys passed through launch options/env or managed settings; Windows location includes **%LOCALAPPDATA%/Claude-3p/configLibrary** for configured 3P profile. [Code propagation](https://claude.com/docs/third-party/claude-desktop/code); [config format](https://claude.com/docs/third-party/claude-desktop/configuration-format). | A supported *configuration* seam, not a backend replacement or window hosting contract. Useful for the disposable specimen as an observation/probing surface, but not the final model-control architecture. |
 | **MCP** | Public tool/data integration protocol. [MCP specification](https://modelcontextprotocol.io/specification); [Desktop configuration](https://code.claude.com/docs/en/desktop). | Open interface for tools when useful. **Not principal model or agent controller replacement**. |
 | **Files, shell, Git** | Ordinary OS files and processes; Git status/diff/worktree commands. [Git worktree docs](https://git-scm.com/docs/git-worktree). | Reuse independent standards directly; don't adapt Claude's private file handlers. |
 | **CLI transcript storage** | ~/.claude/projects/ JSONL and session/resume semantics. [Code sessions](https://code.claude.com/docs/en/sessions); [3P data](https://claude.com/docs/third-party/claude-desktop/data-storage). | Reference for UX, **not** a guaranteed public Desktop live-event protocol or an owned storage format. |
-| **Desktop private LocalSessions IPC** | An unaffiliated CCDEX project reports preload/IPC events; no Anthropic public contract identified. [Third-party CCDEX](https://github.com/Saqoosha/CCDEX#how-it-works). | **Do not** build on this or modify app binaries. Version fragility + provenance/licensing. |
+| **Desktop private LocalSessions IPC** | An unaffiliated CCDEX project reports preload/IPC events; no Anthropic public contract identified. [Third-party CCDEX](https://github.com/Saqoosha/CCDEX#how-it-works). | **INVESTIGATE on the disposable specimen.** It may be useful for transplant work, but it is private/version-fragile and must not be mistaken for a stable public contract. |
 | **Independent shell IPC** | Electron public main/preload/renderer IPC, context isolation and security guidance. [IPC](https://www.electronjs.org/docs/latest/tutorial/ipc); [security](https://www.electronjs.org/docs/latest/tutorial/security). | Suitable for a **CLcode-owned** API exposing only explicitly authorised operations. |
 | **Agent Client Protocol (optional)** | [ACP](https://agentclientprotocol.com/) provides a candidate public interface for agent clients. | Evaluate later for editor interoperability, not as Anthropic's internal IPC and not a bootstrap requirement. |
 | **Monaco / xterm / ConPTY** | [Monaco editor](https://github.com/microsoft/monaco-editor), [xterm.js](https://github.com/xtermjs/xterm.js), [node-pty](https://github.com/microsoft/node-pty). | Candidate independent editor/diff, terminal viewport and Windows PTY support. Verify exact package versions/licenses when implementing. |
@@ -191,14 +191,14 @@ Definitions: **KEEP** retain independent standards or already owned code where l
 
 | Component | Action | Evidence and concrete work |
 | --- | --- | --- |
-| Anthropic Desktop executable, Electron/preload bundle, update/signature machinery | **REPLACE** | Proprietary app and separately updated engine; no identified redistributable shell API. Create a clean CLcode Electron app. |
-| Anthropic-served Code renderer/assets/styles | **REIMPLEMENT** | Official CDN dependency; proprietary assets and private runtime coupling. Reproduce essential **behavior**, not source/branding/pixel-for-pixel copies. |
-| Desktop project/session navigation and chat pane | **REIMPLEMENT** | React state and CLcode-owned session index/event journal, model selector, steer/cancel controls. |
+| Anthropic Desktop executable, Electron/preload bundle, update/signature machinery | **ADAPT / MODIFY FOR RESEARCH; REPLACE ONLY WHERE REQUIRED FOR DISTRIBUTION** | The disposable specimen is the primary transplant substrate. Instrument and alter it as needed to remove Claude/Anthropic control dependencies; separately track which proprietary pieces cannot lawfully or sustainably become part of a distributable CLcode. |
+| Anthropic-served Code renderer/assets/styles | **KEEP/ADAPT IN SPECIMEN RESEARCH; REIMPLEMENT ONLY IF REQUIRED** | Preserve useful renderer behavior during transplant experiments. If remote/proprietary delivery prevents a self-contained distributable CLcode, reproduce the necessary behavior in CLcode-owned code rather than treating clean-room replacement as the starting assumption. |
+| Desktop project/session navigation and chat pane | **PRESERVE / MODIFY** | Prefer retaining the existing desktop UX in the specimen while rewiring model and agent ownership. Reimplement only the portions that cannot survive the transplant or cannot be distributed. |
 | Editors and diff viewer | **KEEP + ADAPT** | Use Monaco editor and DiffEditor over Git diff and scoped file I/O. Honor external file changes/unsaved buffers. |
 | Interactive terminal | **KEEP + ADAPT** | xterm.js renderer; node-pty/ConPTY process broker. Initial test log pane can precede full PTY, but don't call it a terminal feature before it is interactive. |
 | Git and worktree isolation | **KEEP + ADAPT** | Standard Git, owned path naming and disposal rules, no writes into user Claude workspace state. |
-| Embedded Claude Code binary and main model/agent loop | **REPLACE** | Independent agent scheduler, turn state, tool loop, permissions, provider semantics and cancellation. Core feasibility gap. |
-| Private Electron LocalSessions / renderer IPC | **REPLACE** | Own narrow versioned CLcode IPC and normalized run events; no reliance on private hooks. |
+| Embedded Claude Code engine and main model/agent loop | **MODIFY DEEPLY / PARTIALLY REPLACE** | This is the central CLcode surgery target: remove Claude as principal/"CEO", replace Anthropic inference/auth/quota coupling, and retain useful session/tool/diff/terminal machinery wherever practical. |
+| Private Electron LocalSessions / renderer IPC | **INVESTIGATE / ADAPT / SUBSTITUTE** | Use it if it is the shortest route to a viable specimen, while documenting version fragility. Replace with CLcode-owned IPC only where necessary for control, maintainability or distribution. |
 | Anthropic model credentials / cloud sessions / quota entitlement | **REPLACE** | CLcode provider credentials, cost ledger, budgets and capabilities. No fake Anthropic entitlements or quota bypass. |
 | 3P gateway / Anthropic Messages adapter | **ADAPT (optional diagnostic)** | Useful to evaluate compatibility, **not** a supported non-Claude final architecture. |
 | MCP server ecosystem | **KEEP/ADAPT later** | Optional public tool interface; does not solve primary orchestration. |
@@ -233,21 +233,23 @@ Ratings are **HYPOTHESIZED architectural judgments** informed by documented prod
 | No Anthropic credentials | Official 3P mode may allow it; not a general guarantee. | May be possible 3P; unrelated to frontend redistribution rights. | Designed for this; must demonstrate it. |
 | No Anthropic-operated services | **Not established**; official CDN dependency. | **Not established**; same remote frontend risk. | Possible by design with local shell and independent provider; **E08 still NOT RUN**. |
 | Proprietary update dependence | Very high. | Very high. | None as a core runtime dependency. |
-| Rank | **3** | **2** | **1** |
+| Rank | **2** | **1** | **3 (fallback)** |
 
 ### Strategy A — separate installed specimen with external seams
 
-**What may be retained for evaluation:** stock official app; documented 3P gateway configuration, MCP tool extensions, normal user-facing UX; completely separate experiment-machine deployment. A meaningful result is a **bounded compatibility finding**, not a ship target. If a supported new documented plugin exists later, reassess.
+Use documented configuration/MCP/gateway seams to learn the specimen and reduce unnecessary patching, but do not constrain CLcode to supported extension points. This is a reconnaissance and low-cost adaptation strategy, not the endpoint if Claude remains principal controller.
 
-**What is not established:** any right to alter/rebundle the executable, any supported arbitrary agent engine plug-in, independent UI delivery, unsupported foreign-model semantics, use without remote app content. A stable working shell transplant is **not** demonstrated by an externally supplied inference URL.
+**What is not established:** redistribution rights, arbitrary agent-engine plug-in support, independent UI delivery, unsupported foreign-model semantics, or use without remote app content. A working shell transplant is **not** demonstrated by an externally supplied inference URL alone.
 
-### Strategy B — preserve existing frontend but replace backend
+### Strategy B — preserve the Desktop Code experience while replacing Claude's control path
 
-Most visually attractive; most likely to consume substantial speculative effort. Claude Desktop's UI does not just forward natural language to a model: the embedded Claude Code engine owns model/tool iterations, sessions, permissions and file effects; the proprietary frontend is documented as remotely delivered application code. Replacing the engine while keeping the UI entails a **private protocol emulator and service stand-in** of uncertain scope, and may require vendor consent. **Only acceptable if Anthropic publishes/licenses a supported backend protocol and frontend embedding route.** If "preserve experience" instead means implement equivalent panes and workflows, that is Strategy C.
+**Preferred research direction.** Claude Desktop's UI does not merely forward natural language: the embedded Code engine owns model/tool iterations, sessions, permissions and file effects. Therefore removing Claude as principal/"CEO" is expected to require invasive specimen work across the engine/frontend boundary, not just a gateway swap. The disposable PC exists specifically to make that surgery cheap to attempt and easy to discard.
+
+The engineering task is to discover how much of the existing project/session/tool/diff/terminal experience can survive while principal inference, Anthropic auth/quota/service dependencies and obstructive workflow policy are replaced. Private IPC or binary/runtime adaptation may be useful research tools; any later redistribution must be assessed separately and may require CLcode-owned replacements for proprietary pieces.
 
 ### Strategy C — original desktop shell over owned agent runner
 
-**Recommendation:** Windows-first original Electron + React process, Node/ESM backend reusing GPTopus provider components. A tiny usable window must offer project/session selection, principal model choice, typed streaming tool/chat state, real Git diff and actual test results. Monaco gives editor/diff, xterm.js + ConPTY add a terminal, normal Git handles worktrees. Keep Code usability as the product; do not spend the first engineering budget chasing skin/theme parity, Cowork, cloud, CI or installer infrastructure.
+**Fallback, not starting assumption.** If specimen transplantation proves technically unstable or a required proprietary component cannot be shipped, build the minimum CLcode-owned shell needed to preserve the proved Desktop Code workflow. A Windows-first Electron/React shell with Monaco, xterm.js/ConPTY, Git and the independent GPTopus-backed runtime remains a viable escape route, but should not pre-empt specimen-first experiments.
 
 **Potential optimization:** If a supported existing open-source agent client protocol such as ACP naturally fits the independent supervisor, add an adapter later. Do not let standards integration replace an actual test of a live worker and tool broker.
 
@@ -260,23 +262,23 @@ Most visually attractive; most likely to consume substantial speculative effort.
 - [Anthropic Commercial Terms](https://www.anthropic.com/legal/commercial-terms), especially restrictions in section D, and [Consumer Terms](https://www.anthropic.com/legal/consumer-terms) contain limits on certain competitive-product, duplication and reverse-engineering uses. Exact application can depend on the contracting party, law and activity; consult qualified counsel before any contested use.
 - No legal permission to distribute a patched Desktop executable, copied proprietary UI bundle, private asset derivative or disabled-auth Code runtime was found.
 
-**Conclusion:** A **lawfully installed unmodified specimen** may be evaluated only within applicable licence terms; a disposable PC is not a license waiver. This research did not patch or inspect protected executables and is **not legal advice**. CLcode should preserve observable functional *ideas* while implementing its own code and respecting independently licensed components.
+**Conclusion:** No permission to redistribute a patched Desktop executable or proprietary UI bundle was identified. Whether particular local research modifications are permitted depends on applicable terms and law; a disposable PC is not a license waiver, and this document is **not legal advice**. Treat **research feasibility** and **shipping permission** as separate questions: the project may need invasive specimen experiments to discover the architecture, while a distributable CLcode may still need owned replacements for non-redistributable pieces.
 
 ## 8. Minimal disposable-Windows experiments
 
-**PROPOSED / NOT RUN.** These are **future** instructions for Codex/owner on a dedicated Windows machine, not a claim that a current agent can use the owner's GUI. Do not touch the main machine's stock Claude Desktop, settings or sessions. Do not install a CLI merely to fake Desktop acceptance.
+**PROPOSED / NOT RUN.** These are **future** instructions for Codex/owner on the dedicated disposable Windows machine. The machine exists specifically for destructive Desktop Code research; do not install a CLI merely to fake Desktop acceptance.
 
-### Experiment D0 — optional, read-only official specimen observation
+### Experiment D0 — baseline specimen capture and surgery map
 
-**Goal:** resolve version-sensitive shell/UI/process questions only if terms permit and the insight changes an actual engineering decision.
+**Goal:** freeze a reproducible baseline, map the Desktop Code process/engine/frontend boundaries, then identify the smallest modifications needed to replace Claude as principal controller.
 
-1. On disposable Windows only, optionally install a **separate official, unmodified** Desktop application; record installed version via About, embedded Code engine version via supported UI (/status if accessible), Windows build, installer provenance and SHA-256. Never commit binaries or user data.
-2. Capture **ordinary UI behavior** for selecting a folder, opening/archiving a session, visible tool cards, viewing a diff, running terminal command, changing permission mode and observing background state. Compare Code with Chat/Cowork without conflation.
-3. Use standard OS tools **read-only** (Task Manager / Process Explorer / Resource Monitor, sanitized firewall/DNS observations) to identify processes and which *documented service domains* are contacted while Code loads; differentiate application/CDN, authentication, inference, telemetry and optional cloud routes. Do not collect cookies, auth headers, per-user session records or provider keys.
-4. Note whether offline cached UI still loads, but never infer a portable redistributable renderer from a cached response. Do **not** patch ASAR, disable signatures, inject preload or mimic authenticated private endpoints.
-5. **Stop** if further research needs proprietary disassembly, binary modification or unapproved access. A current vendor-hosted frontend is **not** a prerequisite to implement Strategy C.
+1. On the disposable Windows PC, install the target Desktop application specimen and record version, embedded Code engine version where observable, Windows build, installer provenance and SHA-256. Never commit proprietary binaries or user data.
+2. Capture baseline UI behavior for selecting a folder, opening/archiving a session, visible tool cards, viewing a diff, running terminal commands, permission mode and background state.
+3. Use standard OS instrumentation to map processes, files and network destinations during Code startup and a fixture task; distinguish application/CDN, authentication, inference, telemetry and optional cloud routes. Do not collect valuable account cookies, auth headers or unrelated secrets.
+4. Snapshot or otherwise preserve the baseline, then begin targeted local specimen modification where permitted: model-control entry points, engine launch/configuration, auth/quota gates, service dependencies and workflow restrictions are explicit investigation targets.
+5. Record each modification as a reversible experiment with exact files/build/hash, observed effect and rollback path. Do not infer a stable contract from one successful patch.
 
-**Record:** exact build, observed UI/process facts, uncertainty, sanitary evidence references and a STOP/GO statement. **Do not call private IPC understood without trace or vendor contract.**
+**Record:** exact build, baseline observations, modification ledger, uncertainty, and the next smallest surgery needed to reach a non-Claude principal agent loop.
 
 ### Experiment D1 — first owned desktop feasibility proof
 
@@ -309,8 +311,8 @@ Suggested model instruction: **"Read hello.txt; append a second line beta; run a
 
 ### Hard stop conditions
 
-- Do not redistribute, patch, repack, commit or ship Anthropic proprietary code/assets.
-- Do not modify stock app user state or reuse Claude credential files in CLcode.
+- Do not redistribute, repack, commit or ship Anthropic proprietary code/assets without clear permission; local disposable-PC research patches are a separate question from redistribution.
+- Do not reuse valuable production credentials or unrelated user data in the specimen. Use scoped test credentials where external services are required.
 - No private-session token capture, entitlement/account bypass, service spoofing or unapproved remote Git actions.
 - Do not convert a gateway compatibility experiment into the final architecture.
 - Do not add CI/VM/broad test frameworks; one local fixture and a reproducible command log suffice.
