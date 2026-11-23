@@ -26,6 +26,7 @@ A standalone GPTopus configuration or chat interface is an important preliminary
 
 ## Planning documents
 
+- **[Implementation roadmap — START HERE](docs/ROADMAP.md)** — two parallel tracks, the first coding assignment, real acceptance gates, and stop conditions.
 - **[Project plan and acceptance criteria](docs/PLAN.md)** — architecture, boundaries, work phases, experiments, decision gates, risks, and deferred work.
 - **[Experiments and evidence log](docs/EXPERIMENTS.md)** — experiments to run and a template for recording reproducible results.
 
