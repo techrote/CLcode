@@ -34,7 +34,7 @@ Read alongside [ROADMAP](../ROADMAP.md), [PLAN](../PLAN.md), and [EXPERIMENTS](.
 
 **Inference, not demonstrated:** the Node panel should be runnable without Claude installed, based on its imports and entry point. **Untested here:** actual Windows launch, UI navigation, configuration durability, direct provider inference, worker spawning, tool execution, desktop shell, Windows native dependencies, and network audit. Record these under the proper E-cards after physical execution.
 
-**Hard boundaries:** stock Claude remains untouched; do not install Claude Code on the disposable PC for the independent track; do not place Anthropic binaries in CLcode; do not provision a VM, hosted desktop, CI matrix, auto-updater or installer; do not assume the coding agent can drive the owner's Windows GUI from GitHub.
+**Hard boundaries:** the product target is Desktop Code, not the standalone Claude Code CLI; do not place proprietary Anthropic binaries in the public CLcode repository; do not provision a VM, hosted desktop, CI matrix, auto-updater or installer yet; do not assume the coding agent can drive the disposable Windows GUI from GitHub. The Desktop Code specimen on that PC may be modified invasively once the specimen track begins.
 
 ## 2. Desktop shell decision
 
