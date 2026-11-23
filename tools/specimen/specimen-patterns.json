@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "categories": {
+    "principal-model": [
+      "api.anthropic.com",
+      "/v1/messages",
+      "inferenceModels",
+      "behavesAs",
+      "ANTHROPIC_MODEL",
+      "ANTHROPIC_BASE_URL",
+      "claude-opus",
+      "claude-sonnet",
+      "claude-haiku",
+      "third-party inference",
+      "gateway"
+    ],
+    "auth-quota": [
+      "oauth",
+      "login",
+      "sign in",
+      "subscription",
+      "entitlement",
+      "usage limit",
+      "quota",
+      "rate limit",
+      "billing",
+      "plan limit"
+    ],
+    "engine-process": [
+      "claude-code",
+      "claude code",
+      "claude-code-sessions",
+      "worktree",
+      ".claude",
+      "child_process",
+      "spawn(",
+      "spawnSync(",
+      "execFile(",
+      "execFileSync("
+    ],
+    "desktop-ipc": [
+      "LocalSessions",
+      "ipcMain",
+      "ipcRenderer",
+      "contextBridge",
+      "BrowserWindow",
+      "preload",
+      "MessagePort",
+      "named pipe",
+      "WebSocket"
+    ],
+    "services-update": [
+      "autoUpdater",
+      "update-electron-app",
+      "sentry",
+      "telemetry",
+      "segment",
+      "claude.ai",
+      "cdn",
+      "update feed"
+    ],
+    "tool-policy": [
+      "permission mode",
+      "permissions",
+      "tool_use",
+      "tool_result",
+      "allowedTools",
+      "disallowedTools",
+      "bypassPermissions",
+      "dangerously-skip-permissions"
+    ]
+  }
+}
