@@ -179,11 +179,11 @@ Proposed event types: run.started, model.requested, model.delta, tool.requested,
 This yields four distinct questions:
 
 1. **Can a Desktop Code session authenticate to a configured Claude-serving provider without a Claude account?** Yes, in documented 3P configurations (D).
-2. **Can a stock unmodified app run a foreign model as the principal?** Unsupported officially, unproven empirically (D policy; N behavior).
-3. **Can a stock Desktop Code GUI launch and work with no Anthropic-owned *infrastructure*?** Not established; public docs state CDN dependency (D).
+2. **Can an unmodified vendor app run a foreign model as the principal?** Unsupported officially, unproven empirically (D policy; N behavior).
+3. **Can the vendor Desktop Code GUI launch and work with no Anthropic-owned *infrastructure*?** Not established; public docs state CDN dependency (D).
 4. **Can CLcode run a non-Claude principal with no Anthropic credentials or services?** Yes **as an architectural objective**, provided independent supervisor/provider, original shell and an actual E07/E08 verification (H, N).
 
-The services potentially involved in stock desktop include: account sign-in/entitlements for standard modes, application CDN, build/update distribution, optional telemetry, cloud Code session hosting, and model inference (Anthropic by default or a configured Claude-serving 3P). **None** should be silently assumed unnecessary because 3P inference uses a gateway. Do not attempt to bypass account billing, auth, or product access controls.
+The services potentially involved in the vendor Desktop application include: account sign-in/entitlements for standard modes, application CDN, build/update distribution, optional telemetry, cloud Code session hosting, and model inference (Anthropic by default or a configured Claude-serving 3P). **None** should be silently assumed unnecessary because 3P inference uses a gateway. Do not attempt to bypass account billing, auth, or product access controls.
 
 ## 6. Component-level disposition
 
@@ -355,7 +355,7 @@ This is the *critical-path uncertainty*. The desktop UI can be recreated with or
 | Current **Windows** Desktop exact app version, Electron/React/native addon versions | **N**; only old macOS O-S. | Read installed official specimen About, process version and signed file hashes if permitted. **Not a blocker to C**. |
 | Actual current Windows app↔engine IPC/stdio protocol and launch flags | **H/N**, undocumented private contract. | Only if a **supported legal public interface** appears; otherwise do not reverse engineer as a CLcode core dependency. |
 | What part of current Code UI is bundled vs loaded dynamically from Anthropic CDN | **D** remote app-code dependency; detailed partition **H**. | Ordinary network observation, only if useful. No copying proprietary bundles. |
-| Whether stock Desktop 3P can display Code offline after cache warm-up | **N**. | Controlled legitimate use if needed; do not infer redistributability or long-run offline support from caching. |
+| Whether vendor Desktop 3P can display Code offline after cache warm-up | **N**. | Controlled legitimate use if needed; do not infer redistributability or long-run offline support from caching. |
 | Exact current app updater/signing architecture | **N/H** beyond documented MSIX/updating. | Nonessential for C; no patch-stack research. |
 | Foreign-model gateway validity for tool use, streaming, thinking, compaction, subagents | **N** and **officially unsupported**. | Optional bounded disposable-PC compatibility probe; stop on unsupported boundary; don't delay C. |
 | No-Anthropic-sign-in vs no-Anthropic-traffic in 3P Desktop | Documented distinction; zero traffic **N**. | Network observation if evaluating A; not required for owned-shell strategy. |
