@@ -100,7 +100,23 @@ node .\tools\specimen\Test-SpecimenMap.mjs
 node .\tools\specimen\Test-RuntimeAnalysis.mjs
 ```
 
-## 5. Capture after one modification and compare
+## 5. Trace the Desktop → engine process-launch boundary
+
+Before modifying the specimen, capture process-start ancestry and sanitized command-line structure:
+
+```powershell
+node .\tools\specimen\Test-LaunchRedaction.mjs
+
+node .\tools\specimen\Observe-SpecimenLaunch.mjs `
+  --duration 180 `
+  --lab "$env:USERPROFILE\clcode-specimen-lab"
+```
+
+If the Desktop PID is known, pass `--root-pid PID` so generically named descendants are retained.
+
+This complements the periodic runtime/TCP sampler: it is intended to catch short-lived bootstrap/engine-launch processes. See [SPECIMEN-LAUNCH-001](../../docs/SPECIMEN-LAUNCH-001.md).
+
+## 6. Capture after one modification and compare
 
 ```powershell
 # after the bounded local specimen change
