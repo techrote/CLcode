@@ -1,6 +1,8 @@
 # CLcode — desktop-first engineering plan
 
 **Status:** planning baseline; no implementation or acceptance claim.  
+
+**Execution order:** start with [ROADMAP.md](ROADMAP.md); this longer plan is the architecture and requirements reference.
 **Primary repository:** https://github.com/techrote/CLcode  
 **Related project:** https://github.com/techrote/Chlaude-GPTopus  
 **Initial execution environment:** separate disposable Windows development PC + GitHub.  
