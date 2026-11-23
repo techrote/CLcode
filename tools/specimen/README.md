@@ -100,7 +100,41 @@ node .\tools\specimen\Test-SpecimenMap.mjs
 node .\tools\specimen\Test-RuntimeAnalysis.mjs
 ```
 
-## 5. Capture after one modification and compare
+## 5. Apply one hash-guarded reversible modification
+
+Before using the surgery tool against the real specimen:
+
+```powershell
+node .\tools\specimen\Test-SpecimenPatch.mjs
+```
+
+Create a patch specification from the exact candidate file:
+
+```powershell
+node .\tools\specimen\New-SpecimenPatchSpec.mjs `
+  --root 'C:\Path\To\Pinned\Desktop\Install' `
+  --target 'resources\candidate.js' `
+  --out "$env:USERPROFILE\clcode-specimen-lab\experiments\exp-001\patch.json"
+```
+
+After editing the generated spec, **dry-run first**:
+
+```powershell
+node .\tools\specimen\Apply-SpecimenPatch.mjs `
+  --root 'C:\Path\To\Pinned\Desktop\Install' `
+  --spec "$env:USERPROFILE\clcode-specimen-lab\experiments\exp-001\patch.json" `
+  --lab "$env:USERPROFILE\clcode-specimen-lab"
+```
+
+Only then add `--apply`. The tool verifies the exact baseline SHA, exact replacement count, root containment and post-write SHA, and creates an external backup + receipt. Roll back with:
+
+```powershell
+node .\tools\specimen\Rollback-SpecimenPatch.mjs PATH_TO_RECEIPT
+```
+
+See [SPECIMEN-SURGERY-001](../../docs/SPECIMEN-SURGERY-001.md) for the patch schema and evidence rules.
+
+## 6. Capture after one modification and compare
 
 ```powershell
 # after the bounded local specimen change
