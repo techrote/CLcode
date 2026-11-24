@@ -166,3 +166,23 @@ node .\tools\specimen\Check-AsarIntegrity.mjs `
 The detector reads Electron's fuse wire plus the Windows `INTEGRITY/ELECTRONASAR` PE resource and compares the packaged expected ASAR JSON-header SHA-256 with the installed archive. It is read-only.
 
 A resource alone does not prove enforcement: `EnableEmbeddedAsarIntegrityValidation` and `OnlyLoadAppFromAsar` are reported separately. See `docs/SPECIMEN-ASAR-INTEGRITY-001.md`.
+
+
+## Fuse evidence into surgery hypotheses
+
+After static, ASAR, runtime, launch and integrity collection, combine the available evidence before choosing a first modification:
+
+```powershell
+node .\tools\specimen\Test-EvidenceFusion.mjs
+
+$fusion = Join-Path $env:USERPROFILE 'clcode-specimen-lab\maps\fusion'
+node .\tools\specimen\Fuse-SpecimenEvidence.mjs `
+  --surface 'C:\...\desktop-baseline\map.json' `
+  --asar 'C:\...\desktop-asar\asar-map.json' `
+  --runtime 'C:\...\runtime-...\runtime-summary.json' `
+  --launch 'C:\...\launch-...\summary.json' `
+  --integrity 'C:\...\asar-integrity.json' `
+  --out $fusion
+```
+
+Review `HYPOTHESES.md`. The fusion report separates evidence relevance from surgery suitability and requires multiple behavioral evidence sources for its first-experiment shortlist. An empty shortlist means gather more evidence; it is not a reason to lower the threshold.
