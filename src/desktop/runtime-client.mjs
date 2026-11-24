@@ -136,12 +136,14 @@ export class RunFollower {
 
   async spawnAndFollow(params, options = {}) {
     const admitted = await this.client.request('spawn', params);
+    if (this.runId !== admitted.runId) this.cursor = 0;
     this.runId = admitted.runId;
     this.onStatus(admitted);
     return this.follow(admitted.runId, options);
   }
 
   async follow(runId, { signal } = {}) {
+    if (this.runId !== runId) this.cursor = 0;
     this.runId = runId;
     while (true) {
       if (signal?.aborted) throw new RuntimeProtocolError('Run following aborted by client.', 'aborted');

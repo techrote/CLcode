@@ -48,6 +48,31 @@ test('run follower consumes cursored events until terminal status', async () => 
   } finally { await c.close(); }
 });
 
+test('run follower resets its event cursor when switching run identity', async () => {
+  const eventRequests = [];
+  const events = [];
+  const fakeClient = {
+    async request(method, params) {
+      if (method === 'events') {
+        eventRequests.push({ ...params });
+        return params.afterSequence === 0
+          ? [{ runId: params.runId, sequence: 1, type: 'run.started', payload: {} }]
+          : [];
+      }
+      if (method === 'status') return { runId: params.runId, status: 'completed', lastSequence: 1 };
+      throw new Error(`Unexpected method ${method}`);
+    },
+  };
+  const follower = new RunFollower(fakeClient, { onEvent: event => events.push(event) });
+  follower.runId = 'ROLD0001';
+  follower.cursor = 42;
+  const result = await follower.follow('RNEW0001');
+  assert.equal(result.status, 'completed');
+  assert.equal(eventRequests[0].afterSequence, 0);
+  assert.equal(events[0].runId, 'RNEW0001');
+  assert.equal(follower.cursor, 1);
+});
+
 test('follower steering and cancellation use the active run id', async () => {
   const c = client();
   try {
