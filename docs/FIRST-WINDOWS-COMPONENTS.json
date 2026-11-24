@@ -81,6 +81,12 @@
       "name": "RUNTIME-ADMISSION-HARDENING-002",
       "branch": "runtime/005-admission-timeout-integrity",
       "sha": "12eca2de12744dc6a8d86068f0841f7cd95387ec"
+    },
+    {
+      "pr": 17,
+      "name": "DESKTOP-CLIENT-HARDENING-002",
+      "branch": "desktop/002-run-follower-reuse",
+      "sha": "67bde24075502a126026bbc8d89022bb2337b5ab"
     }
   ]
 }
