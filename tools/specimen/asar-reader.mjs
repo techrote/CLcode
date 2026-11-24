@@ -40,7 +40,9 @@ export function readAsarHeader(archive) {
       archiveSize: st.size,
       headerPickleSize,
       dataOffset: 8 + headerPickleSize,
-      headerSha256: createHash('sha256').update(rawHeader).digest('hex'),
+      headerSha256: createHash('sha256').update(jsonText).digest('hex'),
+      headerPickleSha256: createHash('sha256').update(rawHeader).digest('hex'),
+      headerString: jsonText,
       header,
     };
   } finally { closeSync(fd); }
