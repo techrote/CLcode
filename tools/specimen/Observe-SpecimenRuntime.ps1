@@ -44,16 +44,16 @@ function Get-WatchedPids {
             $ids[[int]$p.ProcessId] = $true
         }
     }
-    if ($RootPid.HasValue) { $ids[$RootPid.Value] = $true }
+    if ($null -ne $RootPid) { $ids[[int]$RootPid] = $true }
 
     $changed = $true
     while ($changed) {
         $changed = $false
         foreach ($p in $Processes) {
-            $pid = [int]$p.ProcessId
+            $processId = [int]$p.ProcessId
             $parent = [int]$p.ParentProcessId
-            if ($ids.ContainsKey($parent) -and -not $ids.ContainsKey($pid)) {
-                $ids[$pid] = $true
+            if ($ids.ContainsKey($parent) -and -not $ids.ContainsKey($processId)) {
+                $ids[$processId] = $true
                 $changed = $true
             }
         }

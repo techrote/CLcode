@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import { isWithin as within } from './specimen-path-guard.mjs';
 
 const sha256 = data => createHash('sha256').update(data).digest('hex');
-const within = (root, candidate) => { const rel = relative(root, candidate); return rel === '' || (!rel.startsWith('..') && !rel.startsWith(sep)); };
+
 const arg = process.argv[2];
 if (!arg) throw new Error('Usage: node Rollback-SpecimenPatch.mjs PATH_TO_RECEIPT_OR_PATCH_DIR');
 const input = resolve(arg);
