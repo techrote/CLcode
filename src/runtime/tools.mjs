@@ -1,8 +1,8 @@
-import { execFile } from 'node:child_process';
-import { lstatSync, readFileSync, realpathSync, statSync, writeFileSync, renameSync, mkdtempSync, rmSync, openSync, closeSync } from 'node:fs';
+import { execFile, execFileSync } from 'node:child_process';
+import { lstatSync, readFileSync, realpathSync, statSync, writeFileSync, renameSync, mkdtempSync, rmSync, openSync, closeSync, accessSync, constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep, delimiter } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { promisify } from 'node:util';
 
@@ -32,6 +32,54 @@ export function childEnv(env = process.env) {
 function inside(root, candidate) {
   const rel = relative(root, candidate);
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+function envValue(env, key) {
+  return Object.entries(env ?? {}).find(([name]) => name.toUpperCase() === key.toUpperCase())?.[1] ?? null;
+}
+
+export function resolveExecutable(name, env = process.env, { rejectRoot = null } = {}) {
+  if (typeof name !== 'string' || !/^[A-Za-z0-9._-]+$/.test(name)) throw new Error('Executable name is invalid.');
+  const pathValue = envValue(env, 'PATH');
+  if (!pathValue) throw new Error(`Executable ${name} cannot be resolved because PATH is empty.`);
+  const blockedRoot = rejectRoot ? realpathSync(rejectRoot) : null;
+  const suffixes = process.platform === 'win32' ? ['.exe'] : [''];
+  for (let directory of String(pathValue).split(delimiter)) {
+    directory = directory.trim();
+    if (directory.startsWith('"') && directory.endsWith('"')) directory = directory.slice(1, -1);
+    // Empty and relative PATH elements can resolve through the selected project
+    // working directory. They are never eligible for privileged runtime tools.
+    if (!directory || !isAbsolute(directory)) continue;
+    for (const suffix of suffixes) {
+      try {
+        const candidate = realpathSync(join(directory, name.endsWith(suffix) ? name : name + suffix));
+        if (!statSync(candidate).isFile()) continue;
+        if (blockedRoot && inside(blockedRoot, candidate)) continue;
+        if (process.platform !== 'win32') accessSync(candidate, constants.X_OK);
+        return candidate;
+      } catch {}
+    }
+  }
+  throw new Error(`Executable ${name} was not found on an absolute PATH entry outside the selected project.`);
+}
+
+export function assertNoExternalGitFilters(gitExecutable, cwd, env = childEnv()) {
+  const options = { cwd, windowsHide: true, env, maxBuffer: 16_000_000 };
+  const tracked = execFileSync(gitExecutable, ['--no-optional-locks', 'ls-files', '-z'], options);
+  if (!tracked?.length) return;
+  const output = execFileSync(
+    gitExecutable,
+    ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'check-attr', '-z', 'filter', '--stdin'],
+    { ...options, input: tracked, encoding: 'utf8' },
+  );
+  const parts = String(output).split('\0');
+  for (let i = 0; i + 2 < parts.length; i += 3) {
+    const [path, attribute, value] = parts.slice(i, i + 3);
+    if (attribute !== 'filter') continue;
+    if (value && value !== 'unspecified' && value !== 'unset') {
+      throw new Error(`External Git filters are not supported during CLcode qualification: ${path} has filter=${value}.`);
+    }
+  }
 }
 
 function cleanText(value, max = MAX_OUTPUT) {
@@ -68,6 +116,7 @@ export class ScopedTools {
     this.projectRoot = root;
     this.testTimeoutMs = options.testTimeoutMs ?? 90_000;
     this.toolTimeoutMs = options.toolTimeoutMs ?? 30_000;
+    this.gitExecutable = options.gitExecutable ?? resolveExecutable('git', childEnv(), { rejectRoot: root });
     this.touched = new Map();
   }
 
@@ -76,18 +125,20 @@ export class ScopedTools {
     // configuration (for example core.fsmonitor). Never expose provider/cloud
     // credentials before the ordinary tool subprocess boundary is established.
     const env = childEnv();
-    const { stdout } = await execFileAsync('git', ['rev-parse', '--show-toplevel'], { cwd: projectRoot, timeout: 10_000, windowsHide: true, env });
-    const gitRoot = realpathSync(stdout.trim());
     const requested = realpathSync(projectRoot);
+    const gitExecutable = resolveExecutable('git', env, { rejectRoot: requested });
+    const { stdout } = await execFileAsync(gitExecutable, ['rev-parse', '--show-toplevel'], { cwd: requested, timeout: 10_000, windowsHide: true, env });
+    const gitRoot = realpathSync(stdout.trim());
     const sameRoot = process.platform === 'win32' ? gitRoot.toLowerCase() === requested.toLowerCase() : gitRoot === requested;
     if (!sameRoot) throw new Error(`Project root must be the Git top-level directory: ${gitRoot}`);
     if (options.requireClean !== false) {
-      const flags = await execFileAsync('git', ['ls-files', '-v', '-z'], { cwd: gitRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
+      const flags = await execFileAsync(gitExecutable, ['ls-files', '-v', '-z'], { cwd: gitRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
       if (flags.stdout.split('\0').some(entry => /^[a-zS] /.test(entry))) throw new Error('Project index flags hide worktree changes; clear assume-unchanged or skip-worktree before admission.');
-      const status = await execFileAsync('git', ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--untracked-files=all'], { cwd: gitRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
+      assertNoExternalGitFilters(gitExecutable, gitRoot, env);
+      const status = await execFileAsync(gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--untracked-files=all'], { cwd: gitRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
       if (String(status.stdout ?? '').trim()) throw new Error('Project working tree must be clean before an agent run; commit, stash or discard existing changes first.');
     }
-    return new ScopedTools(gitRoot, options);
+    return new ScopedTools(gitRoot, { ...options, gitExecutable });
   }
 
   schemas() {
@@ -189,11 +240,15 @@ export class ScopedTools {
   async gitExec(args, options) {
     const hooks = mkdtempSync(join(tmpdir(), 'clcode-empty-hooks-'));
     try {
-      return await this.exec('git', ['-c', 'core.fsmonitor=false', '-c', `core.hooksPath=${hooks}`, '-c', 'commit.gpgsign=false', '--literal-pathspecs', ...args], options);
+      return await this.exec(this.gitExecutable, ['-c', 'core.fsmonitor=false', '-c', `core.hooksPath=${hooks}`, '-c', 'commit.gpgsign=false', '--literal-pathspecs', ...args], options);
     } finally { rmSync(hooks, { recursive: true, force: true }); }
   }
 
   async gitLocal({ action, message }, signal) {
+    // .gitattributes and .git/info/attributes can change after admission.
+    // Re-check before every Git operation so a clean/smudge driver can never
+    // become an implicit executable side channel.
+    assertNoExternalGitFilters(this.gitExecutable, this.projectRoot, childEnv());
     if (action === 'status') return this.gitExec(['status', '--short', '--branch'], { timeout: this.toolTimeoutMs, signal, label: 'git status' });
     if (action === 'diff') return this.gitExec(['diff', '--no-ext-diff', '--no-textconv', '--'], { timeout: this.toolTimeoutMs, signal, label: 'git diff' });
     if (action === 'commit') {
