@@ -57,14 +57,28 @@ export class GPTopusAdapter {
 
   async unpack(value) {
     if (!value?.paged) return value;
-    if (value.pages > 256 || value.length > 4_000_000) throw new Error('GPTopus response exceeds CLcode paging bound.');
-    const { dispatch } = await this.load();
-    let joined = '';
-    for (let page = 0; page < value.pages; page++) {
-      joined += (await dispatch('page', { id: value.id, page }, { env: this.env })).chunk;
+    const fail = error => {
+      const wrapped = error instanceof Error ? error : new Error(String(error));
+      // A paged value exists only after GPTopus has an accepted response identity.
+      // Losing the in-memory page cache or receiving incomplete pages must never
+      // erase that identity or be reclassified as a pre-send/local failure.
+      wrapped.responseId ??= value.id ?? null;
+      wrapped.usageDisposition ??= 'ambiguous';
+      wrapped.providerExecutionUnknown = true;
+      return wrapped;
+    };
+    try {
+      if (value.pages > 256 || value.length > 4_000_000) throw new Error('GPTopus response exceeds CLcode paging bound.');
+      const { dispatch } = await this.load();
+      let joined = '';
+      for (let page = 0; page < value.pages; page++) {
+        joined += (await dispatch('page', { id: value.id, page }, { env: this.env })).chunk;
+      }
+      if (joined.length !== value.length) throw new Error('GPTopus paged response was incomplete.');
+      return JSON.parse(joined);
+    } catch (error) {
+      throw fail(error);
     }
-    if (joined.length !== value.length) throw new Error('GPTopus paged response was incomplete.');
-    return JSON.parse(joined);
   }
 
   async create({ worker, input, instructions, tools, effort, previousResponseId, agentId }) {
