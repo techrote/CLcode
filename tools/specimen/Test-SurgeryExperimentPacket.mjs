@@ -31,6 +31,8 @@ try{
   const ineligible={...hypotheses,candidates:[{...candidate,firstExperimentEligible:false}]};writeFileSync(join(tmp,'ineligible.json'),JSON.stringify(ineligible));
   p=spawnSync(process.execPath,[tool,'--hypotheses',join(tmp,'ineligible.json'),'--baseline',baseline,'--candidate',candidate.id,'--objective','x','--out',join(tmp,'ineligible-out')],{encoding:'utf8'});assert.notEqual(p.status,0);assert.match(p.stderr,/not firstExperimentEligible/i);
 
+  p=spawnSync(process.execPath,[tool,'--hypotheses',join(tmp,'hypotheses.json'),'--baseline',baseline,'--objective','   ','--out',join(tmp,'blank-objective')],{encoding:'utf8'});assert.notEqual(p.status,0);assert.match(p.stderr,/objective must be non-empty/i);
+
   const asar={...hypotheses,candidates:[{...candidate,id:'asar:x::main.js',kind:'asar-member',path:'resources/app.asar::main.js',firstExperimentEligible:true}]};writeFileSync(join(tmp,'asar.json'),JSON.stringify(asar));
   p=spawnSync(process.execPath,[tool,'--hypotheses',join(tmp,'asar.json'),'--baseline',baseline,'--candidate','resources/app.asar::main.js','--objective','x','--out',join(tmp,'asar-out')],{encoding:'utf8'});assert.notEqual(p.status,0);assert.match(p.stderr,/ASAR-member candidates require an archive-level strategy/i);
   console.log('CLcode surgery experiment packet self-test: PASS');
