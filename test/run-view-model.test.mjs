@@ -80,3 +80,50 @@ test('tool failures and terminal failure reason remain visible to UI', () => {
   assert.equal(out.reason, 'Model could not recover.');
   assert.equal(out.terminal, true);
 });
+
+
+test('ambiguous provider request is projected as unknown remote execution and spend', () => {
+  const view = createRunView({ runId: 'RVIEW0001', status: 'running', model: 'configured-model' });
+  applyRuntimeEvents(view, [
+    ev(1, 'run.started', { worker: 'sol6-2', model: 'configured-model', configuredModel: 'configured-model', provider: 'openai-responses' }),
+    ev(2, 'model.requested', { step: 1, previousResponseId: null }),
+    ev(3, 'model.request_failed', { step: 1, usageDisposition: 'ambiguous', reason: 'POST outcome unknown' }),
+    ev(4, 'run.interrupted', { reason: 'Remote execution may exist.', providerExecutionUnknown: true, usageUnknown: true, costUnknown: true }),
+  ]);
+  applyRuntimeStatus(view, {
+    runId: 'RVIEW0001', status: 'interrupted', providerExecutionUnknown: true,
+    usageUnknown: true, costUnknown: true, lastSequence: 4,
+  });
+  const out = publicRunView(view);
+  assert.equal(out.status, 'interrupted');
+  assert.equal(out.providerExecutionUnknown, true);
+  assert.equal(out.usage.unknown, true);
+  assert.equal(out.usage.costUnknown, true);
+  assert(out.timeline.some(x => x.type === 'model.request_failed'));
+});
+
+test('provider substitution and free-provider unknown token usage remain distinct facts', () => {
+  const view = createRunView();
+  applyRuntimeEvents(view, [
+    ev(1, 'run.started', { worker: 'kimik3-1pro', model: 'configured-model', configuredModel: 'configured-model', provider: 'nvidia' }),
+    ev(2, 'model.requested', { step: 1, previousResponseId: null }),
+    ev(3, 'model.accepted', {
+      step: 1, responseId: 'chat_c0123456789abcdef_1', status: 'in_progress',
+      model: 'substitute-model', provider: 'nvidia', substitutedFrom: 'configured-model',
+    }),
+    ev(4, 'model.completed', {
+      step: 1, responseId: 'chat_c0123456789abcdef_1', status: 'completed',
+      text: 'done', usage: null, estimatedUsd: 0, priceStatus: 'free',
+      model: 'substitute-model', provider: 'nvidia', substitutedFrom: 'configured-model',
+    }),
+    ev(5, 'run.completed', { answer: 'done', steps: 1 }),
+  ]);
+  const out = publicRunView(view);
+  assert.equal(out.configuredModel, 'configured-model');
+  assert.equal(out.model, 'substitute-model');
+  assert.equal(out.substitutedFrom, 'configured-model');
+  assert.equal(out.provider, 'nvidia');
+  assert.equal(out.usage.unknown, true, 'unknown token count remains unknown');
+  assert.equal(out.usage.costUnknown, false, 'explicit free-price evidence keeps monetary cost known');
+  assert.equal(out.usage.estimatedUsd, 0);
+});
