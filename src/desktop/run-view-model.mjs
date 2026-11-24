@@ -78,6 +78,10 @@ export function createRunView(seed = {}) {
     runId: seed.runId ?? null,
     status: seed.status ?? 'unknown',
     phase: seed.phase ?? null,
+    ownership: seed.ownership ?? null,
+    providerState: seed.providerState ?? null,
+    requestId: seed.requestId ?? null,
+    toolState: seed.toolState ?? null,
     terminal: TERMINAL.has(seed.status),
     projectRoot: seed.projectRoot ?? null,
     worker: seed.worker ?? null,
@@ -108,7 +112,7 @@ export function createRunView(seed = {}) {
 export function applyRuntimeStatus(view, status) {
   if (!status || typeof status !== 'object') return view;
   if (status.runId) view.runId = status.runId;
-  for (const key of ['status', 'phase', 'projectRoot', 'worker', 'model', 'provider', 'effort', 'task', 'currentResponseId', 'answer', 'reason', 'createdAt', 'updatedAt', 'finishedAt']) {
+  for (const key of ['status', 'phase', 'ownership', 'providerState', 'requestId', 'toolState', 'projectRoot', 'worker', 'model', 'provider', 'effort', 'task', 'currentResponseId', 'answer', 'reason', 'createdAt', 'updatedAt', 'finishedAt']) {
     if (status[key] !== undefined) view[key] = clone(status[key]);
   }
   if (status.step !== undefined) view.currentStep = Number(status.step) || 0;
@@ -263,8 +267,8 @@ export function applyRuntimeEvents(view, events) {
 
 export function projectRunView({ status = null, events = [], previous = null } = {}) {
   const view = previous ?? createRunView(status ?? {});
-  applyRuntimeStatus(view, status);
   applyRuntimeEvents(view, events);
+  applyRuntimeStatus(view, status);
   return view;
 }
 
