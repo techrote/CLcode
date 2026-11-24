@@ -197,3 +197,105 @@ test('ordinary descendant process cannot write after test-tool cancellation', as
     assert.equal(existsSync(marker),false,'descendant performed an external effect after cancellation');
   } finally {abort.abort(); if(pending) await pending; if(existsSync(ready)){try{process.kill(Number(readFileSync(ready,'utf8')));}catch{}} rmSync(root,{recursive:true,force:true});}
 });
+
+test('external tracked edits made after admission cannot be absorbed into CLcode ownership', async () => {
+  const {root,project}=fixture();
+  try {
+    const tools=await ScopedTools.create(project);
+    const file=join(project,'src','slug.mjs');
+    writeFileSync(file,readFileSync(file,'utf8')+'\n// independent owner change\n');
+    assert.throws(()=>tools.editFile({path:'src/slug.mjs',old_text:'return String(value)',new_text:'return String(42)'}),/changed|ownership|admission/i);
+  } finally {rmSync(root,{recursive:true,force:true});}
+});
+
+test('external edits between two CLcode edits cannot be absorbed into the second edit', async () => {
+  const {root,project}=fixture();
+  try {
+    const tools=await ScopedTools.create(project);
+    const file=join(project,'src','slug.mjs');
+    tools.editFile({path:'src/slug.mjs',old_text:'return String(value)',new_text:'return String(42)'});
+    writeFileSync(file,readFileSync(file,'utf8')+'\n// independent owner change\n');
+    assert.throws(()=>tools.editFile({path:'src/slug.mjs',old_text:'return String(42)',new_text:'return String(43)'}),/changed|ownership/i);
+  } finally {rmSync(root,{recursive:true,force:true});}
+});
+
+test('commit cannot absorb a user write between final hash check and Git invocation', async () => {
+  const {root,project}=fixture();
+  try {
+    const tools=await ScopedTools.create(project);
+    const file=join(project,'src','slug.mjs');
+    tools.editFile({path:'src/slug.mjs',old_text:'return String(value)',new_text:'return String(42)'});
+    const intended=readFileSync(file,'utf8');
+    const external=intended+'\n// concurrent owner write\n';
+    const old=tools.gitExec.bind(tools);
+    tools.gitExec=async(args,options)=>{
+      if(args[0]==='commit') writeFileSync(file,external);
+      return old(args,options);
+    };
+    const result=await tools.gitLocal({action:'commit',message:'exact intended bytes'});
+    assert.equal(result.ok,true);
+    assert.equal(execFileSync('git',['show','HEAD:src/slug.mjs'],{cwd:project,encoding:'utf8'}),intended);
+    assert.equal(readFileSync(file,'utf8'),external);
+    assert.match(execFileSync('git',['status','--porcelain'],{cwd:project,encoding:'utf8'}),/src\/slug\.mjs/);
+  } finally {rmSync(root,{recursive:true,force:true});}
+});
+
+test('duplicate tool call identity cannot execute any part of an ambiguous response batch', async () => {
+  const {root,project}=fixture();
+  try {
+    const p=immediateProvider();
+    p.create=async args=>{
+      p.creates.push(args);
+      return {id:'resp_duplicate',status:'completed',calls:[
+        {call_id:'same',name:'edit_file',args:{path:'src/slug.mjs',old_text:'return String(value)',new_text:'return String(42)'}},
+        {call_id:'same',name:'edit_file',args:{path:'src/slug.mjs',old_text:'return String(42)',new_text:'return String(43)'}}
+      ]};
+    };
+    const c=new RunController({stateDir:join(root,'state'),provider:p});
+    const result=await c.spawn({projectRoot:project,worker:'mock',task:'duplicate',runId:'RDUPECALL1',maxSteps:1});
+    assert.notEqual(result.status,'completed');
+    assert(!c.events(result.runId).some(e=>e.type==='tool.requested'));
+    assert.equal(execFileSync('git',['status','--porcelain'],{cwd:project,encoding:'utf8'}).trim(),'');
+  } finally {rmSync(root,{recursive:true,force:true});}
+});
+
+test('a repeated provider response ID cannot replay tools on another request', async () => {
+  const {root,project}=fixture();
+  try {
+    const p=immediateProvider();
+    p.create=async args=>{
+      p.creates.push(args);
+      return {id:'resp_replayed',status:'completed',calls:[{call_id:'read',name:'read_file',args:{path:'src/slug.mjs'}}]};
+    };
+    const c=new RunController({stateDir:join(root,'state'),provider:p});
+    const result=await c.spawn({projectRoot:project,worker:'mock',task:'repeated identity',runId:'RREPLAY001',maxSteps:2});
+    assert.equal(result.status,'incomplete'); assert.equal(result.providerState,'unknown');
+    assert.equal(c.events(result.runId).filter(e=>e.type==='tool.requested').length,1);
+  } finally {rmSync(root,{recursive:true,force:true});}
+});
+
+test('control-journal failure during a live tool stops the process before local finalization', async () => {
+  const {root,project}=fixture(), ready=join(root,'ready'), marker=join(root,'late');
+  let pending; const id='RCORRTOOL1';
+  try {
+    writeFileSync(join(project,'test','control-corruption.test.mjs'),
+      "import test from 'node:test'; import {writeFileSync} from 'node:fs';\n"+
+      "test('active',async()=>{writeFileSync("+JSON.stringify(ready)+",String(process.pid));await new Promise(r=>setTimeout(r,1100));writeFileSync("+JSON.stringify(marker)+",'late');await new Promise(r=>setTimeout(r,400));});\n");
+    execFileSync('git',['add','.'],{cwd:project});execFileSync('git',['commit','-m','fixture: control corruption'],{cwd:project,stdio:'pipe'});
+    const p=immediateProvider();
+    p.create=async args=>{p.creates.push(args);return {id:'resp_tool_corrupt',status:'completed',calls:[{call_id:'run',name:'run_test',args:{}}]};};
+    const c=new RunController({stateDir:join(root,'state'),provider:p});
+    pending=observed(c.spawn({projectRoot:project,worker:'mock',task:'tool',runId:id,maxSteps:2}));
+    await until(()=>existsSync(ready));
+    writeFileSync(join(c.store.runDir(id),'control','corrupt.json'),'{broken');
+    const outcome=await pending;
+    assert.notEqual(outcome.value?.status,'completed'); assert.equal(p.creates.length,1);
+    await sleep(1300);
+    assert.equal(existsSync(marker),false,'tool continued after failed control ingestion');
+  } finally {
+    if(pending) await pending;
+    if(existsSync(ready)){try{process.kill(Number(readFileSync(ready,'utf8')));}catch{}}
+    await sleep(100);
+    rmSync(root,{recursive:true,force:true});
+  }
+});
