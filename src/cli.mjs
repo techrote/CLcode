@@ -53,9 +53,10 @@ if (command === 'run' || command === 'workers') {
 // Control/status commands do not need to load a provider; they only manipulate/read durable state.
 const inertProvider = { settings: async () => { throw new Error('Provider not available in control-only command.'); } };
 const controller = new RunController({ stateDir, provider: inertProvider });
+const observed = summary => summary ? { ...summary, ownership: summary.status === 'running' ? 'unverified' : 'terminal' } : summary;
 if (command === 'status') {
   if (!opts._[0]) throw new Error('status requires RUN_ID.');
-  console.log(JSON.stringify(controller.status(opts._[0]), null, 2));
+  console.log(JSON.stringify(observed(controller.status(opts._[0])), null, 2));
 } else if (command === 'events') {
   if (!opts._[0]) throw new Error('events requires RUN_ID.');
   console.log(JSON.stringify(controller.events(opts._[0], Number(opts.after ?? 0)), null, 2));
@@ -66,7 +67,7 @@ if (command === 'status') {
   if (!opts._[0]) throw new Error('cancel requires RUN_ID.');
   console.log(JSON.stringify(controller.cancel(opts._[0]), null, 2));
 } else if (command === 'list') {
-  console.log(JSON.stringify(controller.list(), null, 2));
+  console.log(JSON.stringify(controller.list().map(observed), null, 2));
 } else {
   throw new Error(`Unknown command ${command}.\n\n${usage()}`);
 }
