@@ -148,3 +148,21 @@ node .\tools\specimen\Summarize-AsarMap.mjs `
 Outputs contain archive/member hashes, internal member paths, category scores and short redacted snippets only; archive members are not extracted to the evidence directory.
 
 Read `docs/SPECIMEN-ASAR-001.md` before any ASAR modification. Electron can enforce an embedded ASAR-header integrity hash, so an internal candidate is **mapping evidence**, not automatic permission or technical viability for a direct `app.asar` patch.
+
+
+## ASAR integrity qualification
+
+Before a real `app.asar` or Electron-executable surgery, inspect the packaged integrity relationship:
+
+```powershell
+node .\tools\specimen\Test-AsarIntegrity.mjs
+
+node .\tools\specimen\Check-AsarIntegrity.mjs `
+  --exe 'C:\Path\To\Desktop\Claude.exe' `
+  --root 'C:\Path\To\Desktop' `
+  --out "$env:USERPROFILE\clcode-specimen-lab\maps\asar-integrity.json"
+```
+
+The detector reads Electron's fuse wire plus the Windows `INTEGRITY/ELECTRONASAR` PE resource and compares the packaged expected ASAR JSON-header SHA-256 with the installed archive. It is read-only.
+
+A resource alone does not prove enforcement: `EnableEmbeddedAsarIntegrityValidation` and `OnlyLoadAppFromAsar` are reported separately. See `docs/SPECIMEN-ASAR-INTEGRITY-001.md`.

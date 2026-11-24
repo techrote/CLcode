@@ -45,6 +45,10 @@ try{
   execFileSync(process.execPath,[join(import.meta.dirname,'Scan-AsarSurface.mjs'),'--root',specimen,'--out',out,'--patterns',join(import.meta.dirname,'specimen-patterns.json')],{stdio:'pipe'});
   const map=JSON.parse(readFileSync(join(out,'asar-map.json'),'utf8'));
   assert.equal(map.archiveCount,1); assert.equal(map.totalMembers,5); assert(map.scannedMembers>=4);
+  const explicitOut=join(tmp,'out-explicit');
+  execFileSync(process.execPath,[join(import.meta.dirname,'Scan-AsarSurface.mjs'),'--archive',archive,'--out',explicitOut,'--patterns',join(import.meta.dirname,'specimen-patterns.json')],{stdio:'pipe'});
+  const explicitMap=JSON.parse(readFileSync(join(explicitOut,'asar-map.json'),'utf8'));
+  assert.equal(explicitMap.archiveCount,1); assert.equal(explicitMap.archives[0].archiveRelativePath,'app.asar');
   assert(map.categoryCounts['principal-model']>=3); assert(map.categoryCounts['desktop-ipc']>=2); assert(map.categoryCounts['auth-quota']>=1);
   assert(map.candidates.some(x=>x.memberPath==='main.js'&&x.categories.includes('engine-process')));
   assert(map.candidates.some(x=>x.memberPath==='renderer/preload.js'&&x.categories.includes('desktop-ipc')));
