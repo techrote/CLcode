@@ -3,13 +3,19 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, win32 } from 'node:path';
+import { isWithin } from './specimen-path-guard.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const here=dirname(fileURLToPath(import.meta.url));
 const sha=data=>createHash('sha256').update(data).digest('hex');
 const run=(file,args,opts={})=>execFileSync(process.execPath,[join(here,file),...args],{encoding:'utf8',stdio:['ignore','pipe','pipe'],...opts});
+assert.equal(isWithin('C:/specimen', 'D:/outside/file', win32), false);
+assert.equal(isWithin('C:/specimen', 'C:/other/file', win32), false);
+assert.equal(isWithin('C:/specimen', 'c:/SPECIMEN/inside.js', win32), true);
+assert.equal(isWithin('C:/specimen', 'C:/specimen/..legitimate', win32), true);
+assert.equal(isWithin('//server/share/specimen', '//server/other/file', win32), false);
 const tmp=mkdtempSync(join(tmpdir(),'clcode-patch-'));
 try{
  const root=join(tmp,'specimen'); const lab=join(tmp,'lab'); mkdirSync(root); mkdirSync(lab);
