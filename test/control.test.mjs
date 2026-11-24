@@ -61,10 +61,14 @@ test('ambiguous hard-steer cancellation never submits a replacement', async () =
     await waitForAdmission(controller,runId);
     controller.steer(runId,'Do not replay',{hard:true});
     const result=await pending;
-    assert.equal(result.status,'incomplete');
+    assert.equal(result.status,'running');
+    assert.equal(result.phase,'provider_unknown');
     assert.equal(result.providerState,'unknown');
+    assert.equal(result.remoteExecutionMayContinue,true);
     assert.equal(provider.creates.length,1);
     assert(controller.events(runId).some(e=>e.type==='model.cancel_unconfirmed'));
+    assert(controller.events(runId).some(e=>e.type==='run.provider_unknown'));
+    assert(!controller.events(runId).some(e=>e.type==='run.incomplete'));
   } finally {rmSync(root,{recursive:true,force:true});}
 });
 
@@ -114,9 +118,13 @@ test('ambiguous operator cancellation is not reported as confirmed', async () =>
     await waitForAdmission(controller,runId);
     controller.cancel(runId);
     const result=await pending;
-    assert.equal(result.status,'incomplete');
+    assert.equal(result.status,'running');
+    assert.equal(result.phase,'provider_unknown');
     assert.equal(result.providerState,'unknown');
+    assert.equal(result.remoteExecutionMayContinue,true);
     assert(!controller.events(runId).some(e=>e.type==='model.cancelled'));
+    assert(controller.events(runId).some(e=>e.type==='run.provider_unknown'));
+    assert(!controller.events(runId).some(e=>e.type==='run.incomplete'));
   } finally {rmSync(root,{recursive:true,force:true});}
 });
 
@@ -128,7 +136,8 @@ test('ambiguous create preserves accounting request ID and does not retry', asyn
     const controller=new RunController({stateDir:join(root,'state'),provider});
     const runId='RAMBIGCREATE';
     const result=await controller.spawn({projectRoot:project,worker:'mock',task:'Wait',runId});
-    assert.equal(result.status,'incomplete'); assert.equal(result.currentResponseId,'resp_lost');
+    assert.equal(result.status,'running'); assert.equal(result.phase,'provider_unknown'); assert.equal(result.currentResponseId,'resp_lost');
+    assert.equal(result.remoteExecutionMayContinue,true);
     assert.equal(result.requestId,runId+':1'); assert.equal(provider.creates.length,1);
     assert.equal(provider.creates[0].requestId,result.requestId);
     assert(controller.events(runId).some(e=>e.type==='model.outcome_unknown'));
@@ -142,7 +151,23 @@ test('poll failure preserves accepted identity and marks remote outcome unknown'
     provider.poll=async()=>{throw new Error('transport unavailable')};
     const controller=new RunController({stateDir:join(root,'state'),provider,pollIntervalMs:1});
     const result=await controller.spawn({projectRoot:project,worker:'mock',task:'Wait',runId:'RPOLLFAIL01'});
-    assert.equal(result.status,'incomplete'); assert.equal(result.currentResponseId,'resp_poll_1');
-    assert.equal(result.providerState,'unknown'); assert.equal(provider.creates.length,1);
+    assert.equal(result.status,'running'); assert.equal(result.phase,'provider_unknown'); assert.equal(result.currentResponseId,'resp_poll_1');
+    assert.equal(result.providerState,'unknown'); assert.equal(result.remoteExecutionMayContinue,true); assert.equal(provider.creates.length,1);
+    assert(!controller.events(result.runId).some(e=>e.type==='run.incomplete'));
+  } finally {rmSync(root,{recursive:true,force:true});}
+});
+
+
+test('provider-declared incomplete remains terminal because the remote response is final', async () => {
+  const {root,project}=fixture();
+  try {
+    const provider=new PollingProvider();
+    provider.create=async args=>{provider.creates.push(args); return {id:'resp_final_incomplete',status:'incomplete',reason:'provider stopped',usage:null,estimatedUsd:null};};
+    const controller=new RunController({stateDir:join(root,'state'),provider,pollIntervalMs:1});
+    const result=await controller.spawn({projectRoot:project,worker:'mock',task:'Wait',runId:'RFINALINCOMP'});
+    assert.equal(result.status,'incomplete');
+    assert.equal(result.phase,'incomplete');
+    assert(controller.events(result.runId).some(e=>e.type==='run.incomplete'));
+    assert(!controller.events(result.runId).some(e=>e.type==='run.provider_unknown'));
   } finally {rmSync(root,{recursive:true,force:true});}
 });
