@@ -1,0 +1,28 @@
+name: First Windows exact candidate qualification (one-shot)
+on:
+  push:
+    branches: [integration/first-windows-qualified-001]
+    paths: ['.github/workflows/first-windows-qualification-once.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: windows-2025
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Exact source and native preflight
+        shell: powershell
+        run: |
+          git rev-parse HEAD
+          git --version
+          node --version
+          $PSVersionTable.PSVersion
+          node .\scripts\first-windows-check.mjs
+          if ($LASTEXITCODE -ne 0) { throw "Native evaluator preflight failed: $LASTEXITCODE" }
