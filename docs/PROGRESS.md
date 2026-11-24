@@ -1,7 +1,7 @@
 # CLcode — current implementation status
 
-**Recorded:** 2026-11-23  
-**Main baseline:** `48510bf25bad1aa0d429e3b90fdad507f289189e`
+**Recorded:** 2026-11-24  
+**Main baseline before this status update:** `1cb19f52c8acc40b452300fef9f4201c03cd7fdc`
 
 This file records the current engineering state and evidence boundaries. It is not a substitute for [EXPERIMENTS.md](EXPERIMENTS.md): acceptance gates remain authoritative there.
 
@@ -11,12 +11,12 @@ This file records the current engineering state and evidence boundaries. It is n
 | --- | --- | --- | --- |
 | #3 — SPECIMEN-LAB-001 | `specimen/001-windows-lab` / `2210b6494e33063c3373c06167f23d6d05d8f859` | Windows specimen baseline, runtime observation and bounded surgery tooling | Source prepared; Windows self-test still required on the disposable PC |
 | #4 — HOSTLESS-RUN-001 | `runtime/001-hostless-agent` / `0a4eaf52cde00b85faf0698a006e0879adf6820e` | CLcode-owned principal agent loop over pinned GPTopus provider bridge | Mock-provider mechanical PASS; real local filesystem/process/Git effects; E02/E06 still NOT RUN |
-| #5 — DESKTOP-CLIENT-001 | `desktop/001-runtime-client` / `2cdd0b5ac01ee41e7b34805e45bfc4943ced222e` | Desktop-side process client, run follower and UI projection, now explicitly stacked on PR #9 | Combined development tree 22/22 tests pass; no graphical/specimen acceptance yet |
+| #5 — DESKTOP-CLIENT-001 | `desktop/001-runtime-client` / `b76c186017535ed324afa7614da9ade4a4815b8f` | Desktop-side process client, run follower and UI projection, now explicitly stacked on PR #9 | Combined development tree 22/22 tests pass; no graphical/specimen acceptance yet |
 | #6 — SPECIMEN-MAP-001 | `specimen/002-control-path-map` / `b16909037b0fcfba1af4bddbc926218f62500059` | Read-only static control-surface scanner + runtime correlation | Synthetic scanner/runtime-analysis PASS; no real specimen scan yet |
 | #7 — SPECIMEN-SURGERY-001 | `specimen/003-guarded-surgery` / `db27cd1c4eb7e949581f31d528bfb4a0efab8d79` | Hash-guarded, receipt-backed reversible specimen patching | Synthetic apply/rollback PASS; no real specimen modification yet |
 | #8 — SPECIMEN-LAUNCH-001 | `specimen/004-launch-trace` / `cb3a2fc242cd6faf2be38d3587641dbd276d1037` | Redacted Windows process-start/parent/command-line tracing | Node redaction/filter PASS; Windows WMI watcher NOT RUN |
-| #9 — RUNTIME-HARDENING-001 | `runtime/002-windows-integrity` / `83015186d2e79e1a57b1abf38f75ffa92ad8bc1a` | Clean admission, CLcode-owned commit paths, Windows process-tree cancellation | Runtime-only 11/11 tests pass; actual Windows taskkill tree behavior NOT RUN |
-| #10 — FIRST-WINDOWS-001 evaluator | `integration/first-windows-001` / `587c19a87668f8497ec8543401166b464dad5b17` | HOLD composition of specimen + hardened runtime + Desktop client stacks for one physical checkout | Reconstructed non-Windows integrated preflight PASS; PowerShell/physical Windows tests remain pending |
+| #9 — RUNTIME-HARDENING-001 | `runtime/002-windows-integrity` / `175b2a9e58dd1a9eb519fb96828581bb81eb1bf4` | Clean admission, CLcode-owned commit paths, Windows process-tree cancellation | Runtime-only 11/11 tests pass; actual Windows taskkill tree behavior NOT RUN |
+| #10 — FIRST-WINDOWS-001 evaluator | `integration/first-windows-001` / `4a7b7c99c5170c3d0527186f36677afcf499ac8c` | HOLD composition of specimen + hardened runtime + Desktop client stacks for one physical checkout | Refreshed 2026-11-24; all #3/#6/#7/#8/#4/#9/#5 heads are verified ancestors; PowerShell/physical Windows tests remain pending |
 | #2 — PREPASS-01 | `prepass/01-gptopus-extraction-20261123` / `90b521653d13859f29914dbdb8fc807e342711d0` | GPTopus host-independence archaeology | Source-grounded design/reference |
 | #1 — PREPASS-04 | `prepass/04-windows-desktop-20261123` / `c7f356250fe8ff37bca99c0b6023032e73521aea` | Disposable-Windows bootstrap and first Desktop vertical slice plan | Source-grounded plan; physical run not yet performed |
 
@@ -46,6 +46,8 @@ This file records the current engineering state and evidence boundaries. It is n
 - Runtime integrity hardening now requires a clean worktree at admission, commits only files actually edited through CLcode, revalidates touched-file hashes before commit, and uses a Windows process-tree termination plan.
 - A redacted process-launch tracer now exists to catch short-lived Desktop → embedded-engine launches and their parent/child command-line structure without persisting raw credential-bearing arguments.
 - A single HOLD/evaluator branch now composes the current stacks and includes `scripts/first-windows-check.mjs` plus `docs/FIRST-WINDOWS-001.md` so the first physical session needs one checkout rather than branch switching.
+- The evaluator now carries `docs/FIRST-WINDOWS-COMPONENTS.json`; preflight verifies every recorded component SHA with `git merge-base --is-ancestor`, preventing silent stale-stack evaluation.
+- DESKTOP-CLIENT-001 was repaired after a premature `package.json` Electron entry point/dependency appeared without the corresponding Electron source; the branch now advertises only implemented runtime/client commands.
 - Windows specimen-lab tooling exists to:
   - capture a cryptographic installation baseline;
   - record process/network observations;
@@ -100,8 +102,8 @@ The standalone Claude Code CLI remains an implementation reference/dependency on
 
 ## Immediate next engineering targets
 
-1. Check out **FIRST-WINDOWS-001 / PR #10** on the disposable PC and run `node scripts/first-windows-check.mjs`.
-2. Resolve any Windows-only preflight failure before configuring provider credentials or modifying the Desktop specimen.
+1. Extend specimen mapping into Electron `app.asar` internals so principal-model/engine/auth/IPC candidates are searchable by internal archive path before the physical session.
+2. Check out **FIRST-WINDOWS-001 / PR #10** on the disposable PC and run `node scripts/first-windows-check.mjs`; resolve any Windows-only preflight failure before configuring provider credentials or modifying the Desktop specimen.
 3. Capture the first real specimen baseline, static map, runtime/TCP observation and launch trace.
 4. Execute E01/E02/E06 and the actual Windows process-tree cancellation acceptance.
 5. Use the combined static/runtime/launch evidence to select one hash-guarded Desktop surgery experiment.
