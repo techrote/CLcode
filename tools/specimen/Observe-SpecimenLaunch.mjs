@@ -39,6 +39,11 @@ const stream=createWriteStream(join(out,'launches.jsonl'),{encoding:'utf8'});
 const filter=new LaunchFilter({nameRegex:regex,rootPid:opts.rootPid});
 const events=[];
 const child=spawn(opts.powershell,['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',join(here,'process-start-watch.ps1'),'-DurationSeconds',String(opts.duration)],{stdio:['ignore','pipe','pipe'],windowsHide:true,shell:false});
+// Subscribe before reading stdout; the watcher can exit before readline reaches EOF.
+const childOutcome = new Promise(resolveOutcome => {
+  child.once('error', error => resolveOutcome({ error, code: null, signal: null }));
+  child.once('close', (code, signal) => resolveOutcome({ error: null, code, signal }));
+});
 child.stderr.setEncoding('utf8');
 child.stderr.on('data',chunk=>process.stderr.write(String(chunk)));
 const lines=readline.createInterface({input:child.stdout,crlfDelay:Infinity});
@@ -51,9 +56,10 @@ for await (const line of lines) {
   events.push(event);
   stream.write(`${JSON.stringify(event)}\n`);
 }
-const exitCode=await new Promise(resolveExit=>child.once('exit',code=>resolveExit(code)));
+const outcome=await childOutcome;
 await new Promise(resolveEnd=>stream.end(resolveEnd));
-if (exitCode!==0) throw new Error(`PowerShell process-start watcher exited with code ${exitCode}.`);
+if (outcome.error) throw new Error('PowerShell process-start watcher could not launch: ' + outcome.error.message);
+if (outcome.code!==0) throw new Error(`PowerShell process-start watcher exited with code ${outcome.code}, signal ${outcome.signal ?? 'none'}.`);
 const byPid=new Map();
 for (const event of events) if (event.processId) byPid.set(event.processId,event);
 const summary={schemaVersion:1,createdAtUtc:new Date().toISOString(),durationSeconds:opts.duration,nameRegex:opts.regex,rootPid:opts.rootPid??null,eventCount:events.length,uniqueProcessCount:byPid.size,processes:[...byPid.values()].map(e=>({processId:e.processId,parentProcessId:e.parentProcessId,name:e.name,executablePath:e.executablePath,detailsResolved:e.detailsResolved,commandLine:e.commandLine})),note:'Command lines are sanitized before persistence. Raw watcher output is held only in the observer process pipeline and is never written by this tool.'};
