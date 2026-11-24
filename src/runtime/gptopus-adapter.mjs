@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { childEnv } from './tools.mjs';
+import { childEnv, resolveExecutable, assertNoExternalGitFilters } from './tools.mjs';
 
 const EXPECTED_DONOR = '849627463c3e2be660f9d24976320b072c107b34';
 
@@ -26,16 +26,18 @@ export class GPTopusAdapter {
       // helpers such as core.fsmonitor. Integrity probes therefore use the same
       // credential-scrubbed environment as project tool subprocesses.
       const gitEnv = childEnv(this.env);
+      const gitExecutable = resolveExecutable('git', gitEnv, { rejectRoot: this.root });
       let actual;
-      try { actual = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: this.root, encoding: 'utf8', windowsHide: true, env: gitEnv }).trim(); }
+      try { actual = execFileSync(gitExecutable, ['rev-parse', 'HEAD'], { cwd: this.root, encoding: 'utf8', windowsHide: true, env: gitEnv }).trim(); }
       catch { throw new Error('GPTopus checkout is not a readable Git worktree; cannot verify donor pin.'); }
       if (actual !== this.expectedSha) throw new Error(`GPTopus donor SHA mismatch: expected ${this.expectedSha}, got ${actual}.`);
       let indexFlags;
-      try { indexFlags = execFileSync('git', ['ls-files', '-v', '-z'], { cwd: this.root, encoding: 'utf8', windowsHide: true, env: gitEnv }); }
+      try { indexFlags = execFileSync(gitExecutable, ['ls-files', '-v', '-z'], { cwd: this.root, encoding: 'utf8', windowsHide: true, env: gitEnv }); }
       catch { throw new Error('GPTopus donor index is unreadable.'); }
       if (indexFlags.split('\0').some(entry => /^[a-zS] /.test(entry))) throw new Error('GPTopus donor index flags hide worktree changes; use a full clean checkout without assume-unchanged or skip-worktree.');
+      assertNoExternalGitFilters(gitExecutable, this.root, gitEnv);
       let dirty;
-      try { dirty = execFileSync('git', ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--untracked-files=all'], { cwd: this.root, encoding: 'utf8', windowsHide: true, env: gitEnv }).trim(); }
+      try { dirty = execFileSync(gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--untracked-files=all'], { cwd: this.root, encoding: 'utf8', windowsHide: true, env: gitEnv }).trim(); }
       catch { throw new Error('GPTopus checkout status is unreadable; cannot verify donor source integrity.'); }
       if (dirty) throw new Error('GPTopus donor working tree is not clean; refusing to load source that differs from the pinned commit.');
     }
