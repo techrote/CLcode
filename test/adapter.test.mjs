@@ -17,6 +17,8 @@ test('GPTopus adapter verifies donor pin, clean source and paged bridge contract
     const probe=join(root,'.git','clcode-fsmonitor-probe.sh'), capture=join(root,'.git','clcode-fsmonitor-capture.txt');
     writeFileSync(probe,'#!/bin/sh\nprintf "%s" "${OPENAI_API_KEY-}" > .git/clcode-fsmonitor-capture.txt\nprintf "token\\n"\n'); chmodSync(probe,0o755);
     execFileSync('git',['config','core.fsmonitor',probe],{cwd:root});
+    execFileSync('git',['ls-files','-v','-z'],{cwd:root,env:{...process.env,OPENAI_API_KEY:'synthetic-positive-control'}});
+    assert.equal(readFileSync(capture,'utf8'),'synthetic-positive-control'); rmSync(capture);
     const adapter=new GPTopusAdapter({root,expectedSha:sha,stateDir:join(root,'state'),env:{...process.env,OPENAI_API_KEY:'donor-secret-must-not-leak'}});
     assert.equal((await adapter.listWorkers())[0].name,'fake');
     assert.equal(existsSync(capture),false,'donor integrity probe must not execute repository fsmonitor commands');
@@ -35,4 +37,26 @@ test('invalid paging preserves the accepted response identity', async () => {
   adapter.loaded={dispatch:async()=>({chunk:'{}'})};
   await assert.rejects(adapter.unpack({id:'resp_page',status:'completed',paged:true,pages:1,length:2}),
     error=>error.responseId==='resp_page' && error.usageDisposition==='ambiguous');
+});
+
+
+test('donor verification refuses external Git filters before provider modules load', async () => {
+  const root=mkdtempSync(join(tmpdir(),'clcode-donor-filter-'));
+  try {
+    const dir=join(root,'plugins','openai-workers','bridge'); mkdirSync(dir,{recursive:true});
+    const capture=join(root,'.git','filter-probe-ran');
+    writeFileSync(join(dir,'workers.mjs'),"export const WORKER_TYPES={fake:{model:'fake/model',provider:'fake',tools:true}};\nexport const workerSettings=name=>({name,model:'fake/model',provider:'fake',tools:true,effort_policy:{default:'medium'}});\n");
+    writeFileSync(join(dir,'server.mjs'),"export async function dispatch(){throw new Error('provider must not load');}\n");
+    writeFileSync(join(root,'.gitattributes'),'plugins/openai-workers/bridge/*.mjs filter=spy\n');
+    execFileSync('git',['init','-b','main'],{cwd:root,stdio:'pipe'});
+    execFileSync('git',['config','user.name','test'],{cwd:root}); execFileSync('git',['config','user.email','test@example.invalid'],{cwd:root});
+    execFileSync('git',['add','.'],{cwd:root}); execFileSync('git',['commit','-m','filtered donor'],{cwd:root,stdio:'pipe'});
+    const sha=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
+    const probe=join(root,'.git','filter-probe.sh');
+    writeFileSync(probe,'#!/bin/sh\nprintf ran > .git/filter-probe-ran\ncat\n'); chmodSync(probe,0o755);
+    execFileSync('git',['config','filter.spy.clean',probe],{cwd:root});
+    const adapter=new GPTopusAdapter({root,expectedSha:sha});
+    await assert.rejects(adapter.load(),/External Git filters are not supported/);
+    assert.equal(existsSync(capture),false,'donor clean filter must never execute');
+  } finally {rmSync(root,{recursive:true,force:true});}
 });

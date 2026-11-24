@@ -25,6 +25,15 @@ try{
  const receiptPath=run('Apply-SpecimenPatch.mjs',['--root',root,'--spec',spec,'--lab',lab,'--apply']).trim(); assert(existsSync(receiptPath));
  const changed=readFileSync(target); assert.match(changed.toString('utf8'),/model='clcode'/); const receipt=JSON.parse(readFileSync(receiptPath,'utf8')); assert.equal(sha(changed),receipt.afterSha256); assert.equal(sha(readFileSync(receipt.backup)),receipt.beforeSha256);
  run('Rollback-SpecimenPatch.mjs',[receiptPath]); assert.deepEqual(readFileSync(target),original); assert(JSON.parse(readFileSync(receiptPath,'utf8')).rolledBackAtUtc);
+ // Simulate the two prepared-receipt recovery cases, without touching a real specimen.
+ const interrupted=run('Apply-SpecimenPatch.mjs',['--root',root,'--spec',spec,'--lab',lab,'--apply']).trim();
+ const prepared=JSON.parse(readFileSync(interrupted,'utf8')); assert.equal(prepared.state,'applied');
+ writeFileSync(interrupted,JSON.stringify({...prepared,state:'prepared',appliedAtUtc:null}));
+ run('Rollback-SpecimenPatch.mjs',[interrupted]); assert.deepEqual(readFileSync(target),original);
+ assert.equal(JSON.parse(readFileSync(interrupted,'utf8')).state,'rolled_back');
+ const unmodified=run('Apply-SpecimenPatch.mjs',['--root',root,'--spec',spec,'--lab',lab,'--apply']).trim();
+ const pending=JSON.parse(readFileSync(unmodified,'utf8')); writeFileSync(unmodified,JSON.stringify({...pending,state:'prepared',appliedAtUtc:null}));
+ writeFileSync(target,original); run('Rollback-SpecimenPatch.mjs',[unmodified]); assert.deepEqual(readFileSync(target),original);
  const wrong=join(tmp,'wrong.json'); writeFileSync(wrong,JSON.stringify({...JSON.parse(readFileSync(spec,'utf8')),expectedSha256:'0'.repeat(64)})); const bad=spawnSync(process.execPath,[join(here,'Apply-SpecimenPatch.mjs'),'--root',root,'--spec',wrong],{encoding:'utf8'}); assert.notEqual(bad.status,0); assert.match(bad.stderr,/SHA-256 mismatch/);
  const escape=join(tmp,'escape.json'); writeFileSync(escape,JSON.stringify({...JSON.parse(readFileSync(spec,'utf8')),target:'../outside.txt'})); const escaped=spawnSync(process.execPath,[join(here,'Apply-SpecimenPatch.mjs'),'--root',root,'--spec',escape],{encoding:'utf8'}); assert.notEqual(escaped.status,0); assert.match(escaped.stderr,/escapes specimen root/);
  writeFileSync(target,original); const dup=join(tmp,'dup.json'); writeFileSync(dup,JSON.stringify({schemaVersion:1,id:'dup',target:'app.js',expectedSha256:sha(original),mode:'utf8-text',replacements:[{old:'const',new:'let',expectedCount:1}]})); const dupRun=spawnSync(process.execPath,[join(here,'Apply-SpecimenPatch.mjs'),'--root',root,'--spec',dup],{encoding:'utf8'}); assert.notEqual(dupRun.status,0); assert.match(dupRun.stderr,/expected 1 matches but found 2/);

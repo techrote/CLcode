@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
@@ -41,25 +41,37 @@ export class RunStore {
     return initial;
   }
 
-  event(runId, type, payload = {}) {
+  event(runId, type, payload = {}, summaryPatch = {}) {
     const dir = this.runDir(runId);
-    mkdirSync(dir, { recursive: true });
     const summary = this.readSummary(runId);
     if (!summary) throw new Error(`Unknown run ${runId}.`);
     const prior = this.readEvents(runId, 0);
+    if (TERMINAL.has(prior.at(-1)?.type?.replace(/^run\./, ''))) throw new Error('Cannot append after final run event.');
+    if (TERMINAL.has(summary.status) && type !== `run.${summary.status}`) throw new Error('Cannot append to a terminal run.');
     const sequence = Number(prior.at(-1)?.sequence ?? 0) + 1;
     const event = { runId: safeRun(runId), sequence, at: now(), type, payload };
     appendFileSync(join(dir, 'events.jsonl'), `${JSON.stringify(event)}\n`, { encoding: 'utf8', mode: 0o600 });
-    this.patchSummary(runId, { lastSequence: sequence });
+    this.patchSummary(runId, { ...summaryPatch, lastSequence: sequence });
     return event;
+  }
+
+  finish(runId, status, patch = {}) {
+    if (!TERMINAL.has(status)) throw new Error('Invalid terminal status.');
+    const finishedAt = now();
+    this.event(runId, `run.${status}`, { ...patch, finishedAt }, { ...patch, status, phase: status, finishedAt });
+    return this.readSummary(runId);
   }
 
   readEvents(runId, afterSequence = 0) {
     const id = safeRun(runId);
     const file = join(this.runDir(id), 'events.jsonl');
-    if (!existsSync(file)) return [];
-    const raw = readFileSync(file, 'utf8');
-    if (!raw) return [];
+    const summary = this.readSummary(id);
+    if (!Number.isInteger(afterSequence) || afterSequence < 0) throw new Error('Invalid event cursor.');
+    const raw = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    if (!raw) {
+      if (summary?.lastSequence > 0) throw new Error(`Event history for ${id} has been truncated.`);
+      return [];
+    }
     if (!raw.endsWith('\n')) throw new Error(`Event journal for ${id} ends with a partial record.`);
     const lines = raw.split('\n').slice(0, -1);
     const events = [];
@@ -71,8 +83,10 @@ export class RunStore {
       if (!Number.isInteger(event?.sequence) || event.sequence !== i + 1) {
         throw new Error(`Event journal for ${id} has a missing or duplicate sequence at line ${i + 1}.`);
       }
+      if (events.length && TERMINAL.has(events.at(-1)?.type?.replace(/^run\./, ''))) throw new Error(`Event journal for ${id} contains events after its terminal event.`);
       events.push(event);
     }
+    if (summary && summary.lastSequence > events.length) throw new Error(`Event history for ${id} has been truncated below its durable sequence.`);
     return events.filter(e => e.sequence > afterSequence);
   }
 
@@ -86,6 +100,7 @@ export class RunStore {
     try { summary = JSON.parse(readFileSync(file, 'utf8')); }
     catch { throw new Error(`Run summary for ${id} is corrupt.`); }
     if (summary?.runId !== id) throw new Error(`Run summary for ${id} contains a mismatched run id.`);
+    if (!Number.isInteger(summary.lastSequence) || summary.lastSequence < 0) throw new Error(`Run summary for ${id} has an invalid sequence.`);
     return summary;
   }
 
@@ -121,10 +136,14 @@ export class RunStore {
     const rec = {
       id: `${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`,
       at: now(),
-      ...control,
+      ...control, delivery: 'queued',
     };
-    const file = join(dir, `${rec.id}.json`);
-    writeFileSync(file, JSON.stringify(rec), { encoding: 'utf8', mode: 0o600 });
+    const file = join(dir, `${rec.id}.json`), tmp = `${file}.tmp`;
+    let created = false;
+    try {
+      writeFileSync(tmp, JSON.stringify(rec), { encoding: 'utf8', mode: 0o600, flag: 'wx' }); created = true;
+      renameSync(tmp, file);
+    } finally { if (created) rmSync(tmp, { force: true }); }
     return rec;
   }
 
@@ -135,12 +154,15 @@ export class RunStore {
     const out = [];
     for (const name of names) {
       const file = join(dir, name);
-      try {
-        out.push(JSON.parse(readFileSync(file, 'utf8')));
-        // rename out of inbox before unlink-equivalent deletion to avoid repeat after crash
-        const done = `${file}.taken`;
-        renameSync(file, done);
-      } catch {}
+      const done = `${file}.taken`;
+      if (existsSync(done)) throw new Error('Duplicate claimed control; reconciliation required.');
+      try { renameSync(file, done); }
+      catch (error) { if (error?.code === 'ENOENT') continue; throw error; }
+      let rec;
+      try { rec = JSON.parse(readFileSync(done, 'utf8')); }
+      catch { throw new Error('Claimed control is corrupt; reconciliation required.'); }
+      if (!['cancel','steer'].includes(rec?.type) || `${rec.id}.json` !== name) throw new Error('Claimed control identity is invalid.');
+      out.push(rec);
     }
     return out;
   }

@@ -24,9 +24,10 @@ test('slow admission cannot become a live orphan after an apparent spawn failure
   let summary = null;
   const controller = {
     status(runId) { return summary?.runId === runId ? summary : null; },
-    async spawn({ runId }) {
+    async spawn({ runId, onAdmitted }) {
       await new Promise(resolve => setTimeout(resolve, 80));
       summary = { runId, status: 'running', phase: 'admitted', lastSequence: 0 };
+      onAdmitted(summary);
       await new Promise(resolve => setTimeout(resolve, 30));
       summary = { ...summary, status: 'completed', phase: 'completed' };
       return summary;

@@ -205,7 +205,8 @@ export class RunFollower {
       this.#consume(runId, events);
       let status = await this.client.request('status', { runId });
       if (!status) throw new RuntimeProtocolError(`Run ${runId} no longer exists.`, 'run_missing');
-      this.onStatus(status);
+      if (status.runId !== runId) throw new RuntimeProtocolError('Runtime status identity differs from followed run.', 'status_run_mismatch', { runId, observedRunId: status.runId ?? null });
+      if (!TERMINAL.has(status.status)) this.onStatus(status);
       if (status.status === 'running' && status.ownership === 'unverified') throw new RuntimeProtocolError('Persisted run state does not establish controller liveness; reconcile before retrying.', 'run_ownership_unverified', { runId });
       if (TERMINAL.has(status.status)) {
         // A terminal summary may become visible a few milliseconds before its
@@ -216,6 +217,7 @@ export class RunFollower {
           this.#consume(runId, finalEvents);
           status = await this.client.request('status', { runId });
           if (!status) throw new RuntimeProtocolError(`Run ${runId} no longer exists.`, 'run_missing');
+          if (status.runId !== runId) throw new RuntimeProtocolError('Runtime status identity differs from followed run.', 'status_run_mismatch', { runId, observedRunId: status.runId ?? null });
           const lastSequence = Number(status.lastSequence);
           const complete = Number.isInteger(lastSequence) && lastSequence === this.cursor &&
             this.terminalEventStatus === status.status && this.terminalEventSequence === this.cursor;

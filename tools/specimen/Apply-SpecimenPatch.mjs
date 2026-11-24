@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { writeExclusiveSynced, replaceVerified } from './specimen-recovery.mjs';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { isWithin as within } from './specimen-path-guard.mjs';
@@ -80,7 +81,7 @@ function patchBinary(original, replacements) {
 
 function resolveTarget(root, target) {
   if (typeof target !== 'string' || !target.trim()) throw new Error('Patch spec target must be a non-empty relative path.');
-  if (isAbsolute(target)) throw new Error('Patch target must be relative to --root.');
+  if (isAbsolute(target) || (process.platform === 'win32' && target.includes(':'))) throw new Error('Patch target must be a safe relative path under --root.');
   const candidate = resolve(root, target);
   if (!within(root, candidate)) throw new Error('Patch target escapes specimen root.');
   if (!existsSync(candidate) || !statSync(candidate).isFile()) throw new Error(`Patch target is not an existing file: ${target}`);
@@ -88,6 +89,7 @@ function resolveTarget(root, target) {
   const realRoot = realpathSync(root);
   const actual = realpathSync(candidate);
   if (!within(realRoot, actual)) throw new Error('Resolved patch target escapes specimen root through a symbolic link.');
+  if (statSync(actual).nlink !== 1) throw new Error('Patch target must not have hard-link aliases.');
   return actual;
 }
 
@@ -140,33 +142,33 @@ async function main() {
   }
 
   const lab = resolve(opts.lab ?? join(process.env.USERPROFILE || process.env.HOME || homedir(), 'clcode-specimen-lab'));
+  if (within(root, lab)) throw new Error('Recovery lab must be outside the specimen root.');
+  mkdirSync(lab, { recursive: true });
+  const realLab = realpathSync(lab);
+  if (within(root, realLab)) throw new Error('Recovery lab resolves inside the specimen root.');
+  const parent = join(realLab, 'patches');
+  mkdirSync(parent, { recursive: true });
+  if (!within(realLab, realpathSync(parent))) throw new Error('Recovery directory resolves outside the lab.');
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-  const patchDir = join(lab, 'patches', `${stamp}-${plan.patchId}-${randomBytes(3).toString('hex')}`);
-  mkdirSync(patchDir, { recursive: true });
+  const patchDir = join(realpathSync(parent), stamp + '-' + plan.patchId + '-' + randomBytes(6).toString('hex'));
+  mkdirSync(patchDir);
   const backup = join(patchDir, 'original.bin');
-  copyFileSync(target, backup);
-  const mode = statSync(target).mode;
-  try {
-    writeFileSync(target, patched.buffer, { mode });
-    const observed = sha256(readFileSync(target));
-    if (observed !== afterSha256) throw new Error(`Post-write verification failed: expected ${afterSha256}, got ${observed}.`);
-  } catch (error) {
-    writeFileSync(target, original, { mode });
-    throw error;
-  }
-  writeFileSync(join(patchDir, 'patch-spec.json'), specBytes);
+  const receiptPath = join(patchDir, 'receipt.json');
+  writeExclusiveSynced(backup, original);
+  if (sha256(readFileSync(backup)) !== beforeSha256) throw new Error('Backup verification failed.');
+  writeExclusiveSynced(join(patchDir, 'patch-spec.json'), specBytes);
   const receipt = {
-    ...plan,
-    dryRun: false,
-    patchDir,
-    backup,
-    specPath,
-    specSha256: sha256(specBytes),
-    appliedAtUtc: new Date().toISOString(),
-    rolledBackAtUtc: null,
+    ...plan, dryRun: false, patchDir, backup, specPath, specSha256: sha256(specBytes),
+    state: 'prepared', preparedAtUtc: new Date().toISOString(), appliedAtUtc: null, rolledBackAtUtc: null,
   };
-  writeFileSync(join(patchDir, 'receipt.json'), JSON.stringify(receipt, null, 2));
-  process.stdout.write(`${join(patchDir, 'receipt.json')}\n`);
+  const preparedBytes = Buffer.from(JSON.stringify(receipt, null, 2));
+  writeExclusiveSynced(receiptPath, preparedBytes);
+  if (!readFileSync(receiptPath).equals(preparedBytes)) throw new Error('Prepared receipt verification failed.');
+  if (resolveTarget(root, spec.target) !== target) throw new Error('Patch target identity changed after preparation.');
+  replaceVerified(target, beforeSha256, patched.buffer);
+  const applied = { ...receipt, state: 'applied', appliedAtUtc: new Date().toISOString() };
+  replaceVerified(receiptPath, sha256(preparedBytes), Buffer.from(JSON.stringify(applied, null, 2)));
+  process.stdout.write(receiptPath + '\n');
 }
 
 main().catch(error => { process.stderr.write(`${error?.stack ?? error}\n`); process.exit(1); });

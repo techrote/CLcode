@@ -65,7 +65,7 @@ test('commit includes only CLcode-edited paths and rejects a touched file change
 test('Windows termination plan kills the complete child process tree', async () => {
   const { terminationPlan } = await import('../src/runtime/tools.mjs');
   assert.deepEqual(terminationPlan('win32', 4321), { file:'taskkill', args:['/PID','4321','/T','/F'] });
-  assert.deepEqual(terminationPlan('linux', 4321), { signal:'SIGTERM' });
+  assert.deepEqual(terminationPlan('linux', 4321), { signal:'SIGKILL' });
 });
 
 test('tool subprocess environment excludes provider credentials and Node injection variables', async () => {
@@ -104,6 +104,10 @@ test('admission Git probes cannot expose provider credentials to repository hook
     writeFileSync(probe, '#!/bin/sh\nprintf "%s" "${OPENAI_API_KEY-}" > .git/clcode-fsmonitor-capture.txt\nprintf "token\\n"\n');
     chmodSync(probe, 0o755);
     execFileSync('git', ['config', 'core.fsmonitor', probe], { cwd: project });
+    // Establish a positive control: the unguarded index scan really invokes the configured probe.
+    execFileSync('git', ['ls-files', '-v', '-z'], { cwd: project, env: { ...process.env, OPENAI_API_KEY: 'synthetic-positive-control' } });
+    assert.equal(readFileSync(capture, 'utf8'), 'synthetic-positive-control');
+    rmSync(capture);
     process.env.OPENAI_API_KEY = 'admission-secret-must-not-leak';
     const { ScopedTools } = await import('../src/runtime/tools.mjs');
     await ScopedTools.create(project);
@@ -160,4 +164,62 @@ test('clean admission refuses hidden project index state', async () => {
     writeFileSync(join(project,'src','slug.mjs'),'external hidden change');
     await assert.rejects(ScopedTools.create(project),/index flags/);
   } finally {rmSync(root,{recursive:true,force:true});}
+});
+
+
+test('admission refuses external Git filters before the clean driver can execute', async () => {
+  const {root,project}=fixture();
+  try {
+    writeFileSync(join(project,'.gitattributes'),'src/slug.mjs filter=spy\n');
+    execFileSync('git',['add','.gitattributes'],{cwd:project});
+    execFileSync('git',['commit','-m','fixture: filtered path'],{cwd:project,stdio:'pipe'});
+    const probe=join(project,'.git','filter-probe.sh'), capture=join(project,'.git','filter-probe-ran');
+    writeFileSync(probe,'#!/bin/sh\nprintf ran > .git/filter-probe-ran\ncat\n');
+    chmodSync(probe,0o755);
+    execFileSync('git',['config','filter.spy.clean',probe],{cwd:project});
+    execFileSync('git',['config','filter.spy.smudge','cat'],{cwd:project});
+    const {ScopedTools}=await import('../src/runtime/tools.mjs');
+    await assert.rejects(ScopedTools.create(project),/External Git filters are not supported/);
+    assert.equal(existsSync(capture),false,'filter command must not run during admission');
+  } finally {rmSync(root,{recursive:true,force:true});}
+});
+
+test('Git boundary re-checks attributes after admission before status or commit', async () => {
+  const {root,project}=fixture();
+  try {
+    const {ScopedTools}=await import('../src/runtime/tools.mjs');
+    const tools=await ScopedTools.create(project);
+    const probe=join(project,'.git','filter-probe.sh'), capture=join(project,'.git','filter-probe-ran');
+    writeFileSync(probe,'#!/bin/sh\nprintf ran > .git/filter-probe-ran\ncat\n');
+    chmodSync(probe,0o755);
+    execFileSync('git',['config','filter.spy.clean',probe],{cwd:project});
+    writeFileSync(join(project,'.gitattributes'),'src/slug.mjs filter=spy\n');
+    await assert.rejects(tools.gitLocal({action:'status'}),/External Git filters are not supported/);
+    assert.equal(existsSync(capture),false,'post-admission filter command must not run');
+  } finally {rmSync(root,{recursive:true,force:true});}
+});
+
+test('Git executable resolution ignores project-controlled PATH candidates', async () => {
+  const {root,project}=fixture();
+  const previous=process.env.PATH;
+  try {
+    const fakeDir=join(project,'.git','fakebin');
+    const {mkdirSync}=await import('node:fs');
+    mkdirSync(fakeDir,{recursive:true});
+    const fake=join(fakeDir,process.platform==='win32'?'git.exe':'git');
+    const capture=join(project,'.git','fake-git-ran');
+    if (process.platform==='win32') writeFileSync(fake,'not a real executable');
+    else {
+      writeFileSync(fake,'#!/bin/sh\nprintf ran > ../fake-git-ran\nexit 99\n');
+      chmodSync(fake,0o755);
+    }
+    process.env.PATH=`${fakeDir}${process.platform==='win32'?';':':'}${previous ?? ''}`;
+    const {ScopedTools}=await import('../src/runtime/tools.mjs');
+    const tools=await ScopedTools.create(project);
+    assert.equal(tools.gitExecutable.startsWith(project),false);
+    assert.equal(existsSync(capture),false);
+  } finally {
+    if(previous===undefined) delete process.env.PATH; else process.env.PATH=previous;
+    rmSync(root,{recursive:true,force:true});
+  }
 });
