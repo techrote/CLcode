@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { RunController } from '../src/runtime/controller.mjs';
@@ -93,3 +93,25 @@ test('tool subprocess environment excludes provider credentials and Node injecti
   ]) assert.equal(env[key], undefined, `${key} must not reach project subprocesses`);
 });
 
+
+
+test('admission Git probes cannot expose provider credentials to repository hooks', async () => {
+  const { root, project } = fixture();
+  const probe = join(project, '.git', 'clcode-fsmonitor-probe.sh');
+  const capture = join(project, '.git', 'clcode-fsmonitor-capture.txt');
+  const previous = process.env.OPENAI_API_KEY;
+  try {
+    writeFileSync(probe, '#!/bin/sh\nprintf "%s" "${OPENAI_API_KEY-}" > .git/clcode-fsmonitor-capture.txt\nprintf "token\\n"\n');
+    chmodSync(probe, 0o755);
+    execFileSync('git', ['config', 'core.fsmonitor', probe], { cwd: project });
+    process.env.OPENAI_API_KEY = 'admission-secret-must-not-leak';
+    const { ScopedTools } = await import('../src/runtime/tools.mjs');
+    await ScopedTools.create(project);
+    assert.equal(existsSync(capture), true, 'fsmonitor probe must have executed so the regression is meaningful');
+    assert.equal(readFileSync(capture, 'utf8'), '');
+  } finally {
+    if (previous === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previous;
+    rmSync(root, { recursive:true, force:true });
+  }
+});
