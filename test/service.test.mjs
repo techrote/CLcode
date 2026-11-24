@@ -12,12 +12,32 @@ test('runtime service returns run id promptly and exposes status/events', async 
   const {root,project}=fixture();
   try {
     const provider=new PollingProvider({completeAfter:2}); provider.listWorkers=async()=>[{name:'mock',model:'mock-polling',available:true}];
-    const controller=new RunController({stateDir:join(root,'state'),provider,pollIntervalMs:25}); const service=new RuntimeService({controller,provider,admissionWaitMs:1000});
+    const controller=new RunController({stateDir:join(root,'state'),provider,pollIntervalMs:25}); const service=new RuntimeService({controller,provider});
     const admitted=await service.invoke('spawn',{projectRoot:project,worker:'mock',task:'Wait briefly.',maxSteps:3});
     assert.equal(admitted.status,'running'); assert.match(admitted.runId,/^R/); assert((await service.invoke('list')).some(r=>r.runId===admitted.runId));
     assert.equal((await service.invoke('workers'))[0].name,'mock'); assert.equal((await service.wait(admitted.runId)).status,'completed');
     const events=await service.invoke('events',{runId:admitted.runId,afterSequence:0}); assert(events.some(e=>e.type==='run.started')); assert(events.some(e=>e.type==='run.completed'));
   } finally { rmSync(root,{recursive:true,force:true}); }
+});
+
+test('slow admission cannot become a live orphan after an apparent spawn failure', async () => {
+  let summary = null;
+  const controller = {
+    status(runId) { return summary?.runId === runId ? summary : null; },
+    async spawn({ runId }) {
+      await new Promise(resolve => setTimeout(resolve, 80));
+      summary = { runId, status: 'running', phase: 'admitted', lastSequence: 0 };
+      await new Promise(resolve => setTimeout(resolve, 30));
+      summary = { ...summary, status: 'completed', phase: 'completed' };
+      return summary;
+    },
+  };
+  const service = new RuntimeService({ controller, provider: {} });
+  const started = Date.now();
+  const admitted = await service.start({ runId: 'RSLOW0001' });
+  assert.equal(admitted.status, 'running');
+  assert(Date.now() - started >= 60, 'test must exercise delayed admission rather than an immediate summary');
+  assert.equal((await service.wait('RSLOW0001')).status, 'completed');
 });
 
 test('JSONL service exposes Desktop request/response boundary', async () => {

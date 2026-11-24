@@ -51,22 +51,26 @@ export class RuntimeProcessClient {
 
   get running() { return Boolean(this.child && this.child.exitCode === null && !this.closedError); }
 
-  async request(method, params = {}, { timeoutMs = this.requestTimeoutMs } = {}) {
+  async request(method, params = {}, { timeoutMs } = {}) {
     if (typeof method !== 'string' || !method) throw new Error('method is required.');
     if (!this.child) this.start();
     if (!this.running) throw this.closedError ?? new RuntimeProtocolError('Runtime process is not running.', 'process_exit');
     const id = this.nextId++;
+    const effectiveTimeoutMs = timeoutMs === undefined ? (method === 'spawn' ? null : this.requestTimeoutMs) : timeoutMs;
+    if (effectiveTimeoutMs !== null && (!Number.isFinite(Number(effectiveTimeoutMs)) || Number(effectiveTimeoutMs) <= 0)) {
+      throw new Error('timeoutMs must be a positive number or null.');
+    }
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      const timer = effectiveTimeoutMs === null ? null : setTimeout(() => {
         this.pending.delete(id);
-        reject(new RuntimeProtocolError(`Runtime request ${method} timed out after ${timeoutMs}ms.`, 'timeout', { id, method }));
-      }, timeoutMs);
-      timer.unref?.();
+        reject(new RuntimeProtocolError(`Runtime request ${method} timed out after ${effectiveTimeoutMs}ms.`, 'timeout', { id, method }));
+      }, Number(effectiveTimeoutMs));
+      timer?.unref?.();
       this.pending.set(id, { resolve, reject, timer, method });
       try {
         this.child.stdin.write(`${JSON.stringify({ id, method, params })}\n`, 'utf8');
       } catch (error) {
-        clearTimeout(timer);
+        if (timer) clearTimeout(timer);
         this.pending.delete(id);
         reject(new RuntimeProtocolError(`Could not write runtime request: ${error.message}`, 'write_error'));
       }
@@ -97,7 +101,7 @@ export class RuntimeProcessClient {
     }
     const pending = this.pending.get(message?.id);
     if (!pending) return;
-    clearTimeout(pending.timer);
+    if (pending.timer) clearTimeout(pending.timer);
     this.pending.delete(message.id);
     if (message.error) {
       pending.reject(new RuntimeProtocolError(String(message.error.message ?? 'Runtime request failed.'), String(message.error.code ?? 'runtime_error'), message.error));
@@ -110,7 +114,7 @@ export class RuntimeProcessClient {
     if (this.closedError) return;
     this.closedError = error;
     for (const { reject, timer } of this.pending.values()) {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       reject(error);
     }
     this.pending.clear();

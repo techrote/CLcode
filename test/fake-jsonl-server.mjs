@@ -14,7 +14,7 @@ rl.on('line', line => {
   const ok = result => send({ id, result });
   if (method === 'delay') return setTimeout(() => ok({ value: params.value }), Number(params.ms ?? 0));
   if (method === 'workers') return ok([{ name: 'mock', model: 'mock-coder', available: true }]);
-  if (method === 'spawn') return ok({ runId: 'RCLIENT001', status: 'running', phase: 'admitted' });
+  if (method === 'spawn') return setTimeout(() => ok({ runId: 'RCLIENT001', status: 'running', phase: 'admitted' }), Number(params.delayMs ?? 0));
   if (method === 'events') return ok(allEvents.filter(e => e.sequence > Number(params.afterSequence ?? 0)));
   if (method === 'status') {
     statusPolls++;

@@ -3,12 +3,11 @@ import { newRunId } from './journal.mjs';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export class RuntimeService {
-  constructor({ controller, provider, admissionWaitMs = 2000 } = {}) {
+  constructor({ controller, provider } = {}) {
     if (!controller) throw new Error('controller is required.');
     if (!provider) throw new Error('provider is required.');
     this.controller = controller;
     this.provider = provider;
-    this.admissionWaitMs = admissionWaitMs;
     this.tasks = new Map();
   }
 
@@ -19,8 +18,11 @@ export class RuntimeService {
     this.tasks.set(runId, task);
     task.finally(() => this.tasks.delete(runId)).catch(() => {});
 
-    const deadline = Date.now() + this.admissionWaitMs;
-    while (Date.now() < deadline) {
+    // Never report a failed spawn while controller.spawn is still capable of
+    // admitting the same run later. Admission work may include slow local Git
+    // and provider-module initialization on Windows. Wait until either a durable
+    // summary exists or the task itself resolves/rejects.
+    while (true) {
       const summary = this.controller.status(runId);
       if (summary) return summary;
       const outcome = await Promise.race([
@@ -32,7 +34,6 @@ export class RuntimeService {
         return outcome.value;
       }
     }
-    throw new Error(`Run ${runId} did not reach admission state within ${this.admissionWaitMs}ms.`);
   }
 
   async wait(runId) {
