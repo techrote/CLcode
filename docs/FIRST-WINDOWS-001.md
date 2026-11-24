@@ -30,6 +30,7 @@ Expected before proceeding:
 
 - runtime/Desktop Node tests PASS;
 - specimen map self-test PASS;
+- ASAR internal map self-test PASS;
 - runtime-correlation self-test PASS;
 - guarded patch apply/rollback self-test PASS;
 - launch-redaction/filter self-test PASS;
@@ -48,7 +49,10 @@ New-Item -ItemType Directory -Force $lab | Out-Null
 git clone https://github.com/techrote/Chlaude-GPTopus.git (Join-Path $lab 'Chlaude-GPTopus')
 git -C (Join-Path $lab 'Chlaude-GPTopus') checkout --detach 849627463c3e2be660f9d24976320b072c107b34
 git -C (Join-Path $lab 'Chlaude-GPTopus') rev-parse HEAD
+git -C (Join-Path $lab 'Chlaude-GPTopus') status --porcelain=v1 --untracked-files=all
 ```
+
+The donor checkout must remain clean after pinning; RUNTIME-DONOR-INTEGRITY-001 refuses modified or untracked non-ignored donor source.
 
 Create the deterministic local E06 fixture:
 
@@ -83,6 +87,17 @@ $mapRoot = Join-Path $env:USERPROFILE 'clcode-specimen-lab\maps\desktop-baseline
 node .\tools\specimen\Scan-SpecimenSurface.mjs --root 'C:\Path\To\Desktop\Install' --out $mapRoot
 node .\tools\specimen\Summarize-SpecimenMap.mjs (Join-Path $mapRoot 'map.json')
 ```
+
+
+Map Electron ASAR internals separately so `app.asar` is not treated as one opaque candidate:
+
+```powershell
+$asarMap = Join-Path $env:USERPROFILE 'clcode-specimen-lab\maps\desktop-asar'
+node .\tools\specimen\Scan-AsarSurface.mjs --root 'C:\Path\To\Desktop\Install' --out $asarMap
+node .\tools\specimen\Summarize-AsarMap.mjs (Join-Path $asarMap 'asar-map.json')
+```
+
+Review `ASAR-REPORT.md` beside the ordinary surface report. An internal ASAR match is still candidate evidence; Electron ASAR integrity may make direct archive modification unsuitable until integrity behavior is explicitly qualified.
 
 Before launching a normal Code session, start both runtime observers in separate terminals:
 

@@ -51,6 +51,24 @@
       "name": "RUNTIME-ADMISSION-001",
       "branch": "runtime/003-admission-integrity",
       "sha": "c7e00433625e8956723cfd72a480973fb3cb0998"
+    },
+    {
+      "pr": 12,
+      "name": "RUNTIME-HARDENING-002",
+      "branch": "runtime/003-subprocess-env-isolation",
+      "sha": "567e9d5ef5b564e17482bb5f6c833f24d3f17039"
+    },
+    {
+      "pr": 13,
+      "name": "SPECIMEN-ASAR-001",
+      "branch": "specimen/005-asar-map",
+      "sha": "ff5b74c5ce1b6a0be9ed4085b7ab4305981d7a39"
+    },
+    {
+      "pr": 14,
+      "name": "RUNTIME-DONOR-INTEGRITY-001",
+      "branch": "runtime/004-donor-integrity",
+      "sha": "3903f8b99c72adf5d4addb926b329517aa4b28f3"
     }
   ]
 }
