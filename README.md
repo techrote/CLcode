@@ -32,6 +32,12 @@ Local mechanical verification: **8/8 Node tests pass**, including real filesyste
 
 See **[HOSTLESS-RUN-001](docs/HOSTLESS-RUN-001.md)** for the implementation boundary and first live Windows procedure.
 
+## Desktop integration seam
+
+**DESKTOP-CLIENT-001** adds a tested process client, run follower and provider-neutral UI projection over the hostless runtime. The desktop/specimen layer can now consume run/model/tool/steering state without importing GPTopus or receiving provider credentials. Local stacked verification is **17/17 tests passing**; graphical Desktop acceptance remains unrun.
+
+See **[DESKTOP-CLIENT-001](docs/DESKTOP-CLIENT-001.md)**.
+
 ## Planning documents
 
 - **[Implementation roadmap — START HERE](docs/ROADMAP.md)** — two parallel tracks, the first coding assignment, real acceptance gates, and stop conditions.
