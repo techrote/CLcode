@@ -31,3 +31,33 @@ jobs:
           set -e
           find src scripts test -name '*.mjs' -print0 | xargs -0 -n 1 node --check
           node --test --test-concurrency=1 test/*.test.mjs
+  qualify-windows:
+    needs: qualify
+    runs-on: windows-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Source identity
+        run: |
+          git rev-parse HEAD
+          git --version
+          node --version
+          git status --porcelain
+      - name: Syntax and serial tests on native Windows
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-ChildItem src,scripts,test -Recurse -Filter *.mjs | ForEach-Object {
+            & node --check $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Syntax check failed: $($_.FullName)" }
+          }
+          $tests = @(Get-ChildItem test -Filter '*.test.mjs' | Sort-Object Name | ForEach-Object FullName)
+          & node --test --test-concurrency=1 @tests
+          exit $LASTEXITCODE
