@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
+import { isWithin as within } from './specimen-path-guard.mjs';
 import { homedir } from 'node:os';
 
 const sha256 = data => createHash('sha256').update(data).digest('hex');
 const safeId = value => String(value ?? 'patch').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64) || 'patch';
-const within = (root, candidate) => { const rel = relative(root, candidate); return rel === '' || (!rel.startsWith('..') && !rel.startsWith(sep)); };
+
 
 function parseArgs(argv) {
   const out = { apply: false };
