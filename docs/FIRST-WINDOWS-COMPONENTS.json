@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "recordedAt": "2026-11-24",
-  "purpose": "FIRST-WINDOWS-001 definitive composition pins. Every listed SHA must be an ancestor of the evaluator checkout.",
+  "purpose": "FIRST-WINDOWS-QUALIFIED-001 source-exact composition pins. Every listed SHA must be an ancestor of the evaluator checkout.",
   "gptopusDonor": "849627463c3e2be660f9d24976320b072c107b34",
   "supersededReviewSlices": [
     {
@@ -12,12 +12,12 @@
   ],
   "definitive": {
     "runtime": {
-      "pr": 34,
-      "sha": "aa9810ea4ad5a4a51dc16ca2a985996480b2ec24"
+      "pr": 37,
+      "sha": "8f85b5bcf994f988f1be9d3a885086660d146a82"
     },
     "specimen": {
-      "pr": 35,
-      "sha": "35d9a615e034ea6080e77c7d2e39a9a1538a1fbb"
+      "pr": 39,
+      "sha": "871c210dae12334d63810efe3152e5e7f2e144ad"
     },
     "preflight": {
       "pr": 25,
@@ -210,6 +210,25 @@
       "name": "SPECIMEN-DEFINITIVE-001",
       "branch": "integration/specimen-definitive-001",
       "sha": "35d9a615e034ea6080e77c7d2e39a9a1538a1fbb"
+    },
+    {
+      "pr": 36,
+      "name": "RUNTIME-GIT-FILTER-QUALIFICATION",
+      "branch": "runtime/010-filter-exec-boundary-qual",
+      "sha": "5da7d2d1b197efab149aa3c565af499b88f06053"
+    },
+    {
+      "pr": 37,
+      "name": "RUNTIME-DEFINITIVE-QUAL-001",
+      "branch": "integration/runtime-definitive-filter-qual",
+      "sha": "8f85b5bcf994f988f1be9d3a885086660d146a82"
+    },
+    {
+      "pr": 39,
+      "name": "SPECIMEN-PHYSICAL-SAFETY-001",
+      "branch": "specimen/009-physical-safety",
+      "sha": "871c210dae12334d63810efe3152e5e7f2e144ad"
     }
-  ]
+  ],
+  "qualificationWorkflow": ".github/workflows/first-windows-qualified.yml"
 }

@@ -55,6 +55,12 @@ try{
   assert(map.candidates.some(x=>x.memberPath==='wide.js'&&x.categories.includes('auth-quota')));
   assert(!map.candidates.some(x=>x.memberPath==='assets/image.png'));
   assert.throws(()=>readAsarEntry(info,{...main,offset:'999999999'}),/range exceeds archive/);
+  const unpackedRoot=archive+'.unpacked'; mkdirSync(unpackedRoot);
+  writeFileSync(join(unpackedRoot,'member.js'),'abcd');
+  const member={path:'member.js',type:'file',unpacked:true,size:4};
+  assert.equal(readAsarEntry(info,member,{maxBytes:4}).toString(),'abcd');
+  assert.throws(()=>readAsarEntry(info,{...member,size:1},{maxBytes:2}),/physical size/);
+  assert.throws(()=>readAsarEntry(info,{...member,path:'../member.js'}),/Unsafe ASAR/);
   const hits=readFileSync(join(out,'asar-hits.jsonl'),'utf8');
   assert.match(hits,/api\.anthropic\.com/); assert.match(hits,/sk-\[redacted\]/); assert(!hits.includes('sk-this-should-be-redacted'));
   const report=join(out,'ASAR-REPORT.md'); execFileSync(process.execPath,[join(import.meta.dirname,'Summarize-AsarMap.mjs'),join(out,'asar-map.json'),report],{stdio:'pipe'});

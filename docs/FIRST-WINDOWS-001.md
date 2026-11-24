@@ -1,251 +1,197 @@
-# FIRST-WINDOWS-001 — disposable-PC evaluator sequence
+# FIRST-WINDOWS-001 — gated disposable-PC evaluation
 
-**Purpose:** one checkout for the first physical CLcode feasibility session. This is an **evaluation/HOLD composition**, not a replacement for the individual review PRs.
+This is a research evaluator, not a production distribution or a completed Desktop transplant. The source of truth for selected component heads is FIRST-WINDOWS-COMPONENTS.json; the exact evaluator SHA must be taken from the approved integration PR. Do not substitute a moving branch tip.
 
-The evaluator combines the current specimen lab/mapping/surgery/launch tooling with the hardened hostless runtime and Desktop client. The current physical candidate is composed around RUNTIME-DEFINITIVE-001 / PR #34 and SPECIMEN-DEFINITIVE-001 / PR #35, with FIRST-WINDOWS-PREFLIGHT-001 / PR #25 supplying the native-Node preflight entry point. RUNTIME-DESKTOP-CONSOLIDATION-001 / PR #20 is the canonical combined runtime/Desktop lineage, so subprocess isolation and the later admission/donor/follower fixes are inherited together rather than only meeting inside this evaluator. Its job is to collect honest evidence quickly, not to claim Desktop transplantation before it happens.
+## 1. Phase A — uncredentialed native preflight
 
-## Contents
-
-1. Preflight — verify the combined checkout before touching a real specimen.
-2. Donor and fixture setup — freeze the exact GPTopus donor and local coding fixture.
-3. Specimen baseline — identify and hash the Desktop installation before modification.
-4. Static + runtime archaeology — map likely control seams and observe process/network/launch behavior.
-5. Hostless model acceptance — execute E01, E02 and E06 without Claude Code hosting the work.
-6. First Desktop surgery — choose one evidence-backed principal-control hypothesis and modify one target reversibly.
-7. Evidence to return — the minimal sanitized artifacts needed for the next engineering step.
-
-## 1. Preflight
-
-Use a normal Windows user session. Install only Git and a current Node LTS if missing. Do not install the standalone Claude Code CLI merely for this experiment.
-
-The evaluator also carries `docs/FIRST-WINDOWS-COMPONENTS.json`. Preflight verifies every recorded review-stack SHA is an ancestor of the checkout. Schema v2 also names the definitive runtime/specimen/preflight heads and records superseded consolidation slices explicitly.
-
-From the CLcode evaluator checkout:
+Use ordinary-user PowerShell 5.1 and Node 22.16.0 (the qualified version), with Git for Windows. Use a full-history checkout of the approved exact evaluator SHA; no shallow clone. No live API credentials or real specimen changes during preflight.
 
 ```powershell
+$ErrorActionPreference = 'Stop'
+$lab = Join-Path $env:USERPROFILE 'clcode-lab'
+New-Item -ItemType Directory -Force -Path $lab | Out-Null
+node --version
+git --version
+$PSVersionTable.PSVersion.ToString()
+git rev-parse HEAD
+git status --porcelain=v1 --untracked-files=all
 node .\scripts\first-windows-check.mjs
+if ($LASTEXITCODE -ne 0) { throw 'Preflight failed; stop.' }
 ```
 
-Expected before proceeding:
+Compare HEAD to the owner-approved evaluator pin and require a clean checkout. Preflight must show each component ancestry and every test PASS, including PowerShell specimen-lab and surgery-packet tests. A synthetic or Linux-only PASS does not establish native physical acceptance. If any new adversarial test is red, do not select an older green snapshot to avoid it.
 
-- runtime/Desktop Node tests PASS;
-- specimen map self-test PASS;
-- ASAR internal map self-test PASS;
-- ASAR integrity self-test PASS;
-- evidence-fusion self-test PASS;
-- runtime-correlation self-test PASS;
-- guarded patch apply/rollback self-test PASS;
-- launch-redaction/filter self-test PASS;
-- PowerShell specimen-lab self-test PASS.
+## 2. Phase B — donor setup and isolated E01
 
-A failure here is a development blocker, not something to work around manually.
+Continue only after the approved evaluator and native preflight gates pass. Use a fresh lab with no valuable state. The donor pin is intentional; never force-reset an existing donor checkout.
 
-## 2. Donor and fixture setup
+```powershell
+$donor = Join-Path $lab 'Chlaude-GPTopus'
+if (Test-Path -LiteralPath $donor) { throw 'Use a new lab or inspect the existing donor separately.' }
+git clone https://github.com/techrote/Chlaude-GPTopus.git $donor
+if ($LASTEXITCODE -ne 0) { throw 'Donor clone failed' }
+git -C $donor checkout --detach 849627463c3e2be660f9d24976320b072c107b34
+if ($LASTEXITCODE -ne 0) { throw 'Donor checkout failed' }
+git -C $donor rev-parse HEAD
+git -C $donor status --porcelain=v1 --untracked-files=all
+```
 
-Clone GPTopus separately and freeze the exact donor used by HOSTLESS-RUN-001:
+For E01 use a **separate PowerShell session** and a fresh isolated panel store. Do not configure API keys for E01. A JSON panel setting is not automatically exported into another runtime's environment.
 
 ```powershell
 $lab = Join-Path $env:USERPROFILE 'clcode-lab'
-New-Item -ItemType Directory -Force $lab | Out-Null
-
-git clone https://github.com/techrote/Chlaude-GPTopus.git (Join-Path $lab 'Chlaude-GPTopus')
-git -C (Join-Path $lab 'Chlaude-GPTopus') checkout --detach 849627463c3e2be660f9d24976320b072c107b34
-git -C (Join-Path $lab 'Chlaude-GPTopus') rev-parse HEAD
-git -C (Join-Path $lab 'Chlaude-GPTopus') status --porcelain=v1 --untracked-files=all
+$donor = Join-Path $lab 'Chlaude-GPTopus'
+$e01 = Join-Path $lab 'e01-panel'
+New-Item -ItemType Directory -Path $e01 -ErrorAction Stop | Out-Null
+$env:OAI_CONFIG_STORE = Join-Path $e01 'config.json'
+$env:OAI_CONFIG_STATE_DIR = Join-Path $e01 'ui'
+$env:OPENAI_WORKER_USAGE_DIR = Join-Path $e01 'usage'
+$env:OAI_STEER_DIR = Join-Path $e01 'steer'
+$env:OAI_TRACE_DIR = Join-Path $e01 'trace'
+Remove-Item Env:OAI_TRACE -ErrorAction SilentlyContinue
+node (Join-Path $donor 'plugins\openai-workers\scripts\oai-config.mjs') --no-open --port 18646
 ```
 
-The donor checkout must remain clean after pinning; RUNTIME-DONOR-INTEGRITY-001 refuses modified or untracked non-ignored donor source.
-
-Create the deterministic local E06 fixture:
+If that port is already occupied, stop and choose another unused loopback port. The console prints a token-bearing URL: use it locally, never share it or put it in logs. Open it in a local browser. Change a harmless setting, such as global MAX STEPS, restart the same command with the same isolated store, and confirm persistence. Check in another local terminal that missing/wrong page tokens return 403 and missing/wrong API tokens return 401. For example:
 
 ```powershell
-node .\scripts\create-fixture.mjs (Join-Path $lab 'fixture-e06')
-git -C (Join-Path $lab 'fixture-e06') status --short --branch
-git -C (Join-Path $lab 'fixture-e06') remote -v
+curl.exe -s -o NUL -w "%{http_code}" http://127.0.0.1:18646/
+curl.exe -s -o NUL -w "%{http_code}" "http://127.0.0.1:18646/?t=wrong"
+curl.exe -s -o NUL -w "%{http_code}" http://127.0.0.1:18646/api/schema
+curl.exe -s -o NUL -w "%{http_code}" -H "x-oai-token: wrong" http://127.0.0.1:18646/api/schema
 ```
 
-The fixture should be on `e06-run`, clean, intentionally failing, and have no remote.
+Record the status codes, setting persistence and that no Claude Code host was needed. Do not export the token or raw configuration. Stop the panel and close this shell.
 
-## 3. Specimen baseline
+## 3. Phase C — E02, then E06
 
-Install the target Desktop application specimen on this disposable PC. Record installer provenance and the visible Desktop/embedded Code version if available.
+**Gate:** the current exact runtime qualification must be green, the provider account/worker explicitly authorized, and no unresolved earlier request or worktree lease may exist. Use separate fresh fixtures for E02 and E06, and a fresh local state directory outside either project. Do not use a valuable project. Use one run at a time, no retries on an unknown remote outcome.
 
-Run the baseline capture:
+In a new terminal, configure only the explicitly authorized test provider using the provider's normal secure setup; do not put keys in commands, logs, fixture files or source. Use an isolated usage directory and conservative provider-side/account budget approved by the owner. No Claude Code host, no unrelated API calls.
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\specimen\Capture-SpecimenBaseline.ps1
+$lab = Join-Path $env:USERPROFILE 'clcode-lab'
+$donor = Join-Path $lab 'Chlaude-GPTopus'
+$state = Join-Path $lab 'state-hostless'
+$fixture02 = Join-Path $lab 'fixture-e02'
+$fixture06 = Join-Path $lab 'fixture-e06'
+$env:OPENAI_WORKER_USAGE_DIR = Join-Path $state 'gptopus'
+$env:OAI_CONFIG_STATE_DIR = Join-Path $state 'gptopus-ui'
+$env:OAI_STEER_DIR = Join-Path $state 'steer'
+$env:OAI_TRACE_DIR = Join-Path $state 'trace'
+Remove-Item Env:OAI_TRACE -ErrorAction SilentlyContinue
+node .\src\cli.mjs workers --gptopus $donor --state $state
+if ($LASTEXITCODE -ne 0) { throw 'Donor/worker setup failed' }
+$worker = Read-Host 'Enter an explicitly authorized worker from the list'
+node .\scripts\create-fixture.mjs $fixture02
+if ($LASTEXITCODE -ne 0) { throw 'E02 fixture creation failed' }
+node .\src\cli.mjs run --gptopus $donor --state $state --project $fixture02 --worker $worker --max-steps 1 --max-minutes 3 --task 'Reply exactly E02_OK without invoking tools.'
+if ($LASTEXITCODE -ne 0) { throw 'E02 did not complete; inspect the original run/provider before any retry' }
+git -C $fixture02 status --porcelain=v1 --untracked-files=all
 ```
 
-If automatic discovery misses it, supply `-InstallRoot` explicitly.
+E02 PASS requires a real completed provider response, observed model/request/response identity, usage status, E02_OK, no tools or project mutations, and no Claude Code hosting. Worker listing alone does not count. A provider-unknown outcome is a stop condition, not permission to retry or use another fixture to replay the request.
 
-Keep the resulting `%USERPROFILE%\clcode-specimen-lab` evidence local. Do not add captured specimen metadata/snippets to Git without review.
-
-## 4. Static + runtime archaeology
-
-Create a static control-surface map of the **installation directory**, not account/profile/credential folders:
+After E02 is adjudicated PASS:
 
 ```powershell
-$mapRoot = Join-Path $env:USERPROFILE 'clcode-specimen-lab\maps\desktop-baseline'
-node .\tools\specimen\Scan-SpecimenSurface.mjs --root 'C:\Path\To\Desktop\Install' --out $mapRoot
+node .\scripts\create-fixture.mjs $fixture06
+if ($LASTEXITCODE -ne 0) { throw 'E06 fixture creation failed' }
+git -C $fixture06 status --short --branch
+git -C $fixture06 remote -v
+git -C $fixture06 rev-parse HEAD
+Push-Location $fixture06
+try {
+  node --test
+  if ($LASTEXITCODE -eq 0) { throw 'Expected initial fixture failure; stop' }
+} finally { Pop-Location }
+node .\src\cli.mjs run --gptopus $donor --state $state --project $fixture06 --worker $worker --max-steps 16 --max-minutes 15 --task 'Read src/slug.mjs and test/slug.test.mjs. Fix slugify to pass the existing tests. Run tests, inspect diff, and commit locally.'
+if ($LASTEXITCODE -ne 0) { throw 'E06 did not complete; preserve and reconcile the original run' }
+git -C $fixture06 log -1 --format='%H %s'
+git -C $fixture06 show --stat --oneline HEAD
+git -C $fixture06 status --porcelain=v1 --untracked-files=all
+Push-Location $fixture06
+try {
+  node --test
+  if ($LASTEXITCODE -ne 0) { throw 'E06 final test failed' }
+} finally { Pop-Location }
+```
+
+E06 requires the genuine model-initiated read/edit/test/local commit, actual baseline failure and final PASS, expected changed path only, inspectable event history, actual request identity, no unrelated edits or remote. Do not infer successful coding from a final model message or exit code. Before escalating beyond the disposable fixture, exercise actual Windows descendant-tree cancellation, ambiguous provider outcomes and restart/ownership with no automatic replay. Any unknown upstream outcome is HOLD; reconcile the original response/request and ledger using the authorized provider's normal controls.
+
+## 4. Phase D — read-only Desktop baseline and archaeology
+
+Use a pinned, authorized Desktop research specimen on the disposable PC. Record installer provenance and exact visible version. Do not modify access controls, signing or AppX permissions. Keep the installation isolated from the hostless provider credentials. Exit the credentialed terminal before beginning. Do not copy proprietary files to Git.
+
+```powershell
+$specimenLab = Join-Path $env:USERPROFILE 'clcode-specimen-lab'
+$installRoot = Read-Host 'Enter exact installed specimen directory'
+$exe = Read-Host 'Enter exact installed Desktop executable path'
+$session = Join-Path $specimenLab ('session-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+New-Item -ItemType Directory -Path $session -ErrorAction Stop | Out-Null
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\specimen\Capture-SpecimenBaseline.ps1 -LabRoot $session -InstallRoot $installRoot -DisableAutoDiscovery
+if ($LASTEXITCODE -ne 0) { throw 'Baseline failed' }
+$baseline = @(Get-ChildItem -LiteralPath (Join-Path $session 'captures') -Directory)
+if ($baseline.Count -ne 1) { throw 'Expected exactly one baseline capture' }
+$baseline = $baseline[0].FullName
+$mapRoot = Join-Path $session 'surface'
+$asarMap = Join-Path $session 'asar'
+$integrity = Join-Path $session 'asar-integrity.json'
+node .\tools\specimen\Scan-SpecimenSurface.mjs --root $installRoot --out $mapRoot
+if ($LASTEXITCODE -ne 0) { throw 'Static map failed' }
 node .\tools\specimen\Summarize-SpecimenMap.mjs (Join-Path $mapRoot 'map.json')
-```
-
-
-Map Electron ASAR internals separately so `app.asar` is not treated as one opaque candidate:
-
-```powershell
-$asarMap = Join-Path $env:USERPROFILE 'clcode-specimen-lab\maps\desktop-asar'
-node .\tools\specimen\Scan-AsarSurface.mjs --root 'C:\Path\To\Desktop\Install' --out $asarMap
+if ($LASTEXITCODE -ne 0) { throw 'Static summary failed' }
+node .\tools\specimen\Scan-AsarSurface.mjs --root $installRoot --out $asarMap
+if ($LASTEXITCODE -ne 0) { throw 'ASAR scan failed; record a negative result, do not guess' }
 node .\tools\specimen\Summarize-AsarMap.mjs (Join-Path $asarMap 'asar-map.json')
+if ($LASTEXITCODE -ne 0) { throw 'ASAR summary failed' }
+node .\tools\specimen\Check-AsarIntegrity.mjs --exe $exe --root $installRoot --out $integrity
+if ($LASTEXITCODE -ne 0) { throw 'Integrity inspection failed' }
 ```
 
-Review `ASAR-REPORT.md` beside the ordinary surface report. An internal ASAR match is still candidate evidence; Electron ASAR integrity may make direct archive modification unsuitable until integrity behavior is explicitly qualified.
-
-
-Qualify the Electron fuse/resource relationship **before** choosing `app.asar` as a patch target:
+Review the baseline coverage, especially inaccessible paths and hash errors. Do not treat missing observations as absence of behavior. Start the following observers in two separate ordinary-user terminals, with the exact same $session path set in each terminal:
 
 ```powershell
-node .\tools\specimen\Check-AsarIntegrity.mjs `
-  --exe 'C:\Path\To\Desktop\Claude.exe' `
-  --root 'C:\Path\To\Desktop' `
-  --out "$env:USERPROFILE\clcode-specimen-lab\maps\asar-integrity.json"
-```
-
-Interpret fuse state and packaged ASAR-header hash separately. A matching `INTEGRITY/ELECTRONASAR` resource does not itself prove enforcement; `EnableEmbeddedAsarIntegrityValidation` and `OnlyLoadAppFromAsar` are reported explicitly. If validation is enabled, do not perform a blind archive patch.
-
-Before launching a normal Code session, start both runtime observers in separate terminals:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\specimen\Observe-SpecimenRuntime.ps1 -DurationSeconds 180
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\specimen\Observe-SpecimenRuntime.ps1 -LabRoot $session -DurationSeconds 180
 ```
 
 ```powershell
-node .\tools\specimen\Observe-SpecimenLaunch.mjs --duration 180 --lab "$env:USERPROFILE\clcode-specimen-lab"
+node .\tools\specimen\Observe-SpecimenLaunch.mjs --duration 180 --lab $session
 ```
 
-During that window, open Desktop Code and perform one small disposable local task. Then correlate the periodic observation with the static map:
+During the observation interval perform one small authorized local Desktop task. Wait for both observers to complete. From the same evaluator checkout:
 
 ```powershell
-node .\tools\specimen\Analyze-RuntimeObservation.mjs `
-  'C:\Users\YOU\clcode-specimen-lab\observations\runtime-...' `
-  (Join-Path $mapRoot 'map.json')
+$runtimeDirs = @(Get-ChildItem -LiteralPath (Join-Path $session 'observations') -Directory)
+$launchDirs = @(Get-ChildItem -LiteralPath (Join-Path $session 'launches') -Directory)
+if ($runtimeDirs.Count -ne 1 -or $launchDirs.Count -ne 1) { throw 'Ambiguous observation selection' }
+$runtimeDir = $runtimeDirs[0].FullName
+$launchDir = $launchDirs[0].FullName
+node .\tools\specimen\Analyze-RuntimeObservation.mjs $runtimeDir (Join-Path $mapRoot 'map.json')
+if ($LASTEXITCODE -ne 0) { throw 'Runtime correlation failed' }
+$fusion = Join-Path $session 'fusion'
+node .\tools\specimen\Fuse-SpecimenEvidence.mjs --surface (Join-Path $mapRoot 'map.json') --asar (Join-Path $asarMap 'asar-map.json') --runtime (Join-Path $runtimeDir 'runtime-summary.json') --launch (Join-Path $launchDir 'summary.json') --integrity $integrity --out $fusion
+if ($LASTEXITCODE -ne 0) { throw 'Evidence fusion failed' }
 ```
 
-The useful output is a ranked hypothesis map: principal-model/control candidates, process ancestry, embedded-engine launch structure, auth/quota candidates, IPC candidates, and which processes owned outbound connections. None of those facts alone prove behavioral ownership.
+Treat correlation and rankings as triage, not proof of application-layer traffic purpose, inference or tool ownership. Do not export unreviewed reports or command-line captures. If the shortlist is empty, record that result.
 
+## 5. Phase E — bounded experiment packet and recovery gate
 
-Fuse the available evidence products before selecting a first experiment:
+This phase is independently gated. Do not apply to an installed vendor specimen until the owner explicitly approves one bounded lawful research experiment and native recovery is demonstrated on a **synthetic scratch copy**. AppX/ACL/signing, live updater or unknown integrity behavior is a stop condition; do not bypass them. A read-only negative result is useful. The current packet generator does not authorize patch application.
+
+Use a reviewed eligible candidate with an exact baseline SHA and at least two relevant evidence sources, including live evidence. Use the packet tool, not a hand-generated replacement spec that bypasses baseline binding:
 
 ```powershell
-$fusion = Join-Path $env:USERPROFILE 'clcode-specimen-lab\maps\fusion'
-node .\tools\specimen\Fuse-SpecimenEvidence.mjs `
-  --surface (Join-Path $mapRoot 'map.json') `
-  --asar (Join-Path $asarMap 'asar-map.json') `
-  --runtime 'C:\Users\YOU\clcode-specimen-lab\observations\runtime-...\runtime-summary.json' `
-  --launch 'C:\Users\YOU\clcode-specimen-lab\launches\launch-...\summary.json' `
-  --integrity "$env:USERPROFILE\clcode-specimen-lab\maps\asar-integrity.json" `
-  --out $fusion
+$packet = Join-Path $session 'first-experiment'
+node .\tools\specimen\Prepare-SurgeryExperiment.mjs --hypotheses (Join-Path $fusion 'hypotheses.json') --baseline $baseline --rank 1 --objective 'Test one bounded, authorized behavioral hypothesis' --out $packet
+if ($LASTEXITCODE -ne 0) { throw 'Packet refused; do not weaken the gate' }
 ```
 
-Review `HYPOTHESES.md`. The report separates evidence relevance from surgery suitability. If the first-experiment shortlist is empty, gather more runtime/launch evidence rather than lowering the multi-source threshold.
+Review PACKET.md and verify the exact identity and baseline before authoring any replacement. A prepared receipt is not proof of a successful patch. The recovery tool writes verified backup and prepared receipt before modification, uses staged replacement, and refuses unknown target bytes. A real experiment requires a quiescent scratch specimen, verified recovery and a controlled before/after observation. No direct ASAR-member patch or alteration of protection mechanisms. Stop on unexpected bytes, unresolved receipt, access denial, or uncertain integrity. Never publish proprietary bytes or backups.
 
-## 5. Hostless model acceptance
+## 6. Evidence return and stopping rules
 
-### E01 — standalone GPTopus panel
+Return the exact evaluator/donor SHAs, native preflight result, explicit E01/E02/E06 decisions, selected authorized provider identity and usage disposition (not key), baseline coverage/version, reviewed evidence summary, and any negative result. No token-bearing URLs, raw journals, proprietary code, binary backups, account data or unreviewed full captures. E07/E08 require genuine graphical CLcode operation and measured independence; nothing in preflight promotes those gates.
 
-Use isolated config/state paths and launch the panel directly with Node. Verify a harmless setting persists across restart and wrong/missing access token is rejected. This proves the control panel is independent of Claude inference; it does not prove the coding loop.
-
-### E02 — real provider call without Claude Code
-
-List available workers through the CLcode adapter:
-
-```powershell
-node .\src\cli.mjs workers `
-  --gptopus (Join-Path $lab 'Chlaude-GPTopus') `
-  --state (Join-Path $lab 'state')
-```
-
-Configure only an authorized test provider/key. Execute a real hostless request and record the provider/model/request identifiers and usage without recording the key.
-
-### E06 — real Read → Edit → Test → local commit
-
-Run the real principal against the deterministic fixture:
-
-```powershell
-node .\src\cli.mjs run `
-  --gptopus (Join-Path $lab 'Chlaude-GPTopus') `
-  --state (Join-Path $lab 'state') `
-  --project (Join-Path $lab 'fixture-e06') `
-  --worker WORKER_NAME `
-  --task "Read src/slug.mjs and test/slug.test.mjs. Fix slugify to pass the existing tests. Run the tests, inspect the diff, and commit locally."
-```
-
-Required evidence:
-
-- model genuinely requests reads/edits/test rather than merely describing them;
-- baseline test fails and post-edit test exits 0;
-- local commit exists;
-- unrelated changes are not included;
-- event journal and provider IDs are inspectable;
-- no Claude Code process is required to own the run.
-
-Also perform one cancellation test with a child process and verify the complete Windows process tree is gone after Stop/cancel.
-
-## 6. First Desktop surgery
-
-Do not choose a patch merely because a string looks interesting. Start from the fused `HYPOTHESES.md` shortlist and select one hypothesis supported by at least two behavioral evidence sources. Treat the fusion score as triage, not proof.
-
-Create a surgery ledger entry, then generate a hash-pinned patch template:
-
-```powershell
-node .\tools\specimen\New-SpecimenPatchSpec.mjs `
-  --root 'C:\Path\To\Desktop\Install' `
-  --target 'relative\candidate.file' `
-  --out "$env:USERPROFILE\clcode-specimen-lab\experiments\exp-001\patch.json"
-```
-
-After filling one exact replacement, **dry-run first**:
-
-```powershell
-node .\tools\specimen\Apply-SpecimenPatch.mjs `
-  --root 'C:\Path\To\Desktop\Install' `
-  --spec "$env:USERPROFILE\clcode-specimen-lab\experiments\exp-001\patch.json" `
-  --lab "$env:USERPROFILE\clcode-specimen-lab"
-```
-
-Only apply after reviewing the predicted hash/replacement counts. Run one controlled before/after behavioral observation, recapture the specimen, compare it, record the finding, then rollback unless the next experiment deliberately depends on the modified state.
-
-The first surgery question should preferably target the narrowest seam toward replacing Claude as the principal Desktop Code controller, not cosmetic UI changes.
-
-## 7. Evidence to return
-
-Do **not** upload provider keys, token-bearing localhost URLs, cookies, account data, proprietary app binaries, or unreviewed full captures.
-
-Useful sanitized return material is:
-
-- `FIRST-WINDOWS-001` preflight output;
-- exact CLcode evaluator SHA and GPTopus donor SHA;
-- baseline manifest summary and install-root/version facts;
-- static `REPORT.md` / candidate summary after reviewing snippets;
-- ASAR internal report plus reviewed ASAR integrity/fuse report;
-- runtime and launch reports after reviewing redaction;
-- E01/E02/E06 PASS/FAIL entries with real vs mock clearly labelled;
-- E06 run/event summary, test exit code, Git diff/stat and local commit SHA;
-- first surgery experiment notes, patch receipt hashes and before/after behavior;
-- exact blockers/negative results.
-
-The first session is successful even if the Desktop surgery result is negative, provided it narrows the control path with reproducible evidence.
-
-Bind the selected eligible file candidate to the exact baseline capture before authoring any replacement:
-
-```powershell
-$packet = Join-Path $env:USERPROFILE 'clcode-specimen-lab\experiments\exp-001'
-node .\tools\specimen\Prepare-SurgeryExperiment.mjs \`
-  --hypotheses (Join-Path $fusion 'hypotheses.json') \`
-  --baseline 'C:\Users\YOU\clcode-specimen-lab\captures\baseline-...' \`
-  --rank 1 \`
-  --objective 'Test one evidence-backed principal-control hypothesis.' \`
-  --out $packet
-```
-
-The packet generator refuses stale/missing hashes, ambiguous bindings, ineligible candidates and ASAR-member targets. Review `PACKET.md` and edit exactly one replacement in `patch.json` before the dry-run.
+A failure of any independent gate is recorded as FAIL/BLOCKED/NOT RUN; do not proceed into a later risky phase just to fill the checklist.
