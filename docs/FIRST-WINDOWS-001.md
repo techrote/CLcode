@@ -2,7 +2,7 @@
 
 **Purpose:** one checkout for the first physical CLcode feasibility session. This is an **evaluation/HOLD composition**, not a replacement for the individual review PRs.
 
-The evaluator combines the current specimen lab/mapping/surgery/launch tooling with the hardened hostless runtime and Desktop client. Its job is to collect honest evidence quickly, not to claim Desktop transplantation before it happens.
+The evaluator combines the current specimen lab/mapping/surgery/launch tooling with the hardened hostless runtime and Desktop client. RUNTIME-DESKTOP-CONSOLIDATION-001 / PR #20 is the canonical combined runtime/Desktop lineage, so subprocess isolation and the later admission/donor/follower fixes are inherited together rather than only meeting inside this evaluator. Its job is to collect honest evidence quickly, not to claim Desktop transplantation before it happens.
 
 ## Contents
 

@@ -99,6 +99,12 @@
       "name": "SPECIMEN-HYPOTHESIS-001",
       "branch": "specimen/007-hypothesis-fusion",
       "sha": "0503951abd9c5dfe0fcf83b42f37d2077d6ef80a"
+    },
+    {
+      "pr": 20,
+      "name": "RUNTIME-DESKTOP-CONSOLIDATION-001",
+      "branch": "integration/runtime-desktop-001",
+      "sha": "c4c5b032f9342605208ab23441dfc6253e4743ac"
     }
   ]
 }
