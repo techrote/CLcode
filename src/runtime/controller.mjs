@@ -32,6 +32,7 @@ export class RunController {
 
   async spawn({ projectRoot, worker, task, effort, maxSteps = 16, maxMinutes = 30, runId = newRunId() }) {
     if (typeof task !== 'string' || !task.trim()) throw new Error('task must be non-empty text.');
+    if (!Number.isFinite(maxMinutes) || maxMinutes <= 0) throw new Error('maxMinutes must be a positive finite number.');
     if (!Number.isInteger(maxSteps) || maxSteps < 1 || maxSteps > 100) throw new Error('maxSteps must be 1..100.');
     const tools = await ScopedTools.create(projectRoot);
     const settings = await this.provider.settings(worker);
@@ -43,6 +44,7 @@ export class RunController {
     let input = task;
     let currentResponseId = null;
     let cancelled = false;
+    let cancellationConfirmed = false;
     let deferredSteer = [];
     const toolAbort = new AbortController();
 
@@ -55,6 +57,15 @@ export class RunController {
 
     const checkDeadline = () => Date.now() - started > maxMinutes * 60_000;
     const controls = () => this.store.takeControls(runId);
+    // Chat transport aborts are local observations, not authoritative upstream cancellation.
+    const cancelActive = async () => {
+      const outcome = currentResponseId
+        ? await this.provider.cancel({ worker: settings.name, id: currentResponseId }).catch(() => ({ status: 'cancel_unknown' }))
+        : { status: 'cancel_unknown' };
+      const confirmed = Boolean(currentResponseId && outcome?.id === currentResponseId && outcome.status === 'cancelled' && (!settings.provider || settings.provider === 'openai-responses' || settings.provider === 'openai'));
+      this.store.event(runId, confirmed ? 'model.cancelled' : 'model.cancel_unconfirmed', { responseId: currentResponseId, outcome });
+      return confirmed;
+    };
 
     const applyControls = async ({ whileResponse = false } = {}) => {
       const incoming = controls();
@@ -64,9 +75,8 @@ export class RunController {
           cancelled = true;
           this.store.event(runId, 'run.cancel_requested', { controlId: control.id });
           toolAbort.abort();
-          if (whileResponse && currentResponseId) {
-            const outcome = await this.provider.cancel({ worker: settings.name, id: currentResponseId }).catch(error => ({ status: 'cancel_unknown', reason: String(error?.message ?? error) }));
-            this.store.event(runId, 'model.cancelled', { responseId: currentResponseId, outcome });
+          if (whileResponse && !cancellationConfirmed) {
+            cancellationConfirmed = await cancelActive();
           }
         } else if (control.type === 'steer') {
           const text = String(control.text ?? '').trim();
@@ -129,15 +139,17 @@ export class RunController {
         let hardRestart = null;
         while (response.status === 'in_progress' || response.status === 'queued') {
           if (checkDeadline()) {
-            if (currentResponseId) await this.provider.cancel({ worker: settings.name, id: currentResponseId }).catch(() => null);
-            return finish('time_limit', { reason: `Exceeded ${maxMinutes} minute run limit.` });
+            if (!await cancelActive()) return finish('incomplete', { reason: 'Run deadline reached; upstream cancellation is unconfirmed.', providerState: 'unknown' });
+            return finish('time_limit', { reason: `Exceeded ${maxMinutes} minute run limit.`, currentResponseId: null });
           }
           const steer = await applyControls({ whileResponse: true });
-          if (cancelled) return finish('cancelled', { reason: 'Cancelled by operator during model response.' });
+          if (cancelled) return cancellationConfirmed
+            ? finish('cancelled', { reason: 'Cancelled by operator during model response.', currentResponseId: null })
+            : finish('incomplete', { reason: 'Operator requested cancellation; upstream cancellation is unconfirmed.', providerState: 'unknown' });
           const hard = steer.filter(s => s.hard);
           if (hard.length) {
-            if (currentResponseId) await this.provider.cancel({ worker: settings.name, id: currentResponseId }).catch(() => null);
-            hardRestart = hard;
+            if (!await cancelActive()) return finish('incomplete', { reason: 'Hard steering stopped: upstream cancellation is unconfirmed; no replacement request was sent.', providerState: 'unknown' });
+            hardRestart = steer;
             this.store.event(runId, 'model.interrupted', { responseId: currentResponseId, reason: 'hard steering' });
             break;
           }
@@ -147,11 +159,13 @@ export class RunController {
           }
           await sleep(this.pollIntervalMs);
           const lateSteer = await applyControls({ whileResponse: true });
-          if (cancelled) return finish('cancelled', { reason: 'Cancelled by operator during model response.' });
+          if (cancelled) return cancellationConfirmed
+            ? finish('cancelled', { reason: 'Cancelled by operator during model response.', currentResponseId: null })
+            : finish('incomplete', { reason: 'Operator requested cancellation; upstream cancellation is unconfirmed.', providerState: 'unknown' });
           const lateHard = lateSteer.filter(s => s.hard);
           if (lateHard.length) {
-            if (currentResponseId) await this.provider.cancel({ worker: settings.name, id: currentResponseId }).catch(() => null);
-            hardRestart = lateHard;
+            if (!await cancelActive()) return finish('incomplete', { reason: 'Hard steering stopped: upstream cancellation is unconfirmed; no replacement request was sent.', providerState: 'unknown' });
+            hardRestart = lateSteer;
             this.store.event(runId, 'model.interrupted', { responseId: currentResponseId, reason: 'hard steering' });
             break;
           }
@@ -178,9 +192,11 @@ export class RunController {
         const calls = normalizeCalls(response);
         previousResponseId = response.id;
         currentResponseId = null;
+        this.store.patchSummary(runId, { currentResponseId: null });
 
         if (!calls.length) {
-          const finalSteer = await applyControls();
+          const finalSteer = [...deferredSteer, ...(await applyControls())];
+          deferredSteer = [];
           if (cancelled) return finish('cancelled', { reason: 'Cancelled by operator.' });
           if (finalSteer.length) {
             input = finalSteer.map(s => ({ role: 'user', content: `[Operator steering] ${s.text}` }));
@@ -193,6 +209,8 @@ export class RunController {
         this.store.patchSummary(runId, { phase: 'tools', activeToolCount: calls.length });
         const outputs = [];
         for (const call of calls) {
+          deferredSteer.push(...await applyControls());
+          if (checkDeadline() && !cancelled) return finish('time_limit', { reason: `Exceeded ${maxMinutes} minute run limit before tool execution.`, currentResponseId: null });
           if (cancelled) return finish('cancelled', { reason: 'Cancelled by operator.' });
           this.store.event(runId, 'tool.requested', { step, callId: call.call_id, name: call.name, args: call.args });
           const result = await executeTool(call);
