@@ -1,0 +1,33 @@
+name: Runtime serial qualification
+on:
+  push:
+    branches:
+      - integration/runtime-definitive-filter-qual
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: runtime-serial-qualification
+  cancel-in-progress: true
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Source identity
+        run: |
+          git rev-parse HEAD
+          git --version
+          node --version
+          git status --porcelain
+      - name: Syntax and serial tests
+        run: |
+          set -e
+          find src scripts test -name '*.mjs' -print0 | xargs -0 -n 1 node --check
+          node --test --test-concurrency=1 test/*.test.mjs
