@@ -45,6 +45,12 @@
       "name": "DESKTOP-CLIENT-001",
       "branch": "desktop/001-runtime-client",
       "sha": "b76c186017535ed324afa7614da9ade4a4815b8f"
+    },
+    {
+      "pr": 11,
+      "name": "RUNTIME-ADMISSION-001",
+      "branch": "runtime/003-admission-integrity",
+      "sha": "c7e00433625e8956723cfd72a480973fb3cb0998"
     }
   ]
 }

@@ -5,8 +5,8 @@ import { RuntimeProcessClient, RunFollower, RuntimeProtocolError } from '../src/
 
 const fake = fileURLToPath(new URL('./fake-jsonl-server.mjs', import.meta.url));
 
-function client() {
-  return new RuntimeProcessClient({ command: process.execPath, args: [fake], requestTimeoutMs: 2000 });
+function client(requestTimeoutMs = 2000) {
+  return new RuntimeProcessClient({ command: process.execPath, args: [fake], requestTimeoutMs });
 }
 
 test('runtime process client correlates concurrent out-of-order replies', async () => {
@@ -17,6 +17,19 @@ test('runtime process client correlates concurrent out-of-order replies', async 
     assert.equal((await fast).value, 'fast');
     assert.equal((await slow).value, 'slow');
     assert.equal((await c.request('workers'))[0].name, 'mock');
+  } finally { await c.close(); }
+});
+
+test('spawn admission is not abandoned by the generic request timeout', async () => {
+  const c = client(20);
+  try {
+    const admitted = await c.request('spawn', { delayMs: 80 });
+    assert.equal(admitted.runId, 'RCLIENT001');
+    assert.equal(admitted.status, 'running');
+    await assert.rejects(
+      c.request('spawn', { delayMs: 80 }, { timeoutMs: 10 }),
+      error => error instanceof RuntimeProtocolError && error.code === 'timeout'
+    );
   } finally { await c.close(); }
 });
 
