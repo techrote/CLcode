@@ -19,10 +19,13 @@ test('GPTopus adapter verifies donor pin, clean source and paged bridge contract
     execFileSync('git',['config','core.fsmonitor',probe],{cwd:root});
     const adapter=new GPTopusAdapter({root,expectedSha:sha,stateDir:join(root,'state'),env:{...process.env,OPENAI_API_KEY:'donor-secret-must-not-leak'}});
     assert.equal((await adapter.listWorkers())[0].name,'fake');
-    assert.equal(existsSync(capture),true,'fsmonitor probe must have executed so the regression is meaningful'); assert.equal(readFileSync(capture,'utf8'),'');
+    assert.equal(existsSync(capture),false,'donor integrity probe must not execute repository fsmonitor commands');
     assert.equal((await adapter.create({worker:'fake',input:'hi',instructions:'x',tools:[],agentId:'RFAKE0001'})).text,'ok');
     await assert.rejects(new GPTopusAdapter({root,expectedSha:'0000000000000000000000000000000000000000'}).load(),/SHA mismatch/);
+    execFileSync('git',['update-index','--assume-unchanged','plugins/openai-workers/bridge/workers.mjs'],{cwd:root});
     appendFileSync(join(dir,'workers.mjs'),'// local mutation after pin\n');
+    await assert.rejects(new GPTopusAdapter({root,expectedSha:sha}).load(),/index flags/);
+    execFileSync('git',['update-index','--no-assume-unchanged','plugins/openai-workers/bridge/workers.mjs'],{cwd:root});
     await assert.rejects(new GPTopusAdapter({root,expectedSha:sha}).load(),/working tree is not clean/);
   } finally { rmSync(root,{recursive:true,force:true}); }
 });
