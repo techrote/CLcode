@@ -39,7 +39,7 @@ function surfaceEvidence(map,src){
   if(!src)return;
   for(const row of src.data.candidates??[]){
     const key=full(row.root,row.relativePath), c=add(map,`file:${key}`,'file',displayPath(row.relativePath));
-    c.fullPath=key; c.root=row.root; c.relativePath=row.relativePath; addCats(c,row.categories);
+    c.fullPath=key; c.root=row.root; c.relativePath=row.relativePath; c.sha256=row.sha256??null; c.size=row.size??null; addCats(c,row.categories);
     evidence(c,'surface',clamp(row.score,1,60),{score:row.score,hitCount:row.hitCount,special:Boolean(row.special)});
   }
 }
@@ -49,7 +49,7 @@ function asarEvidence(map,src){
     const archiveKey=full(row.root,row.archiveRelativePath);
     const member=norm(row.memberPath);
     const c=add(map,`asar:${archiveKey}::${member}`,'asar-member',`${displayPath(row.archiveRelativePath)}::${displayPath(row.memberPath)}`);
-    c.archiveKey=archiveKey;c.archiveRelativePath=row.archiveRelativePath;c.memberPath=row.memberPath;c.root=row.root;addCats(c,row.categories);
+    c.archiveKey=archiveKey;c.archiveRelativePath=row.archiveRelativePath;c.memberPath=row.memberPath;c.memberSha256=row.memberSha256??null;c.root=row.root;addCats(c,row.categories);
     evidence(c,'asar',clamp(row.score,1,70),{score:row.score,hitCount:row.hitCount,unpacked:Boolean(row.unpacked),memberSha256:row.memberSha256});
     const archive=map.get(`file:${archiveKey}`);
     if(archive){ c.evidence.push({source:'surface-archive',weight:3,detail:{archiveCandidate:archive.path}});c.rawScore+=3; }
@@ -125,7 +125,7 @@ function finalize(map){
     const surgeryScore=Math.max(0,evidenceScore-surgeryPenalty);
     const high=[...c.categories].filter(x=>HIGH_VALUE.has(x));
     const eligible=high.length>0&&behavior.length>=2&&!(c.kind==='asar-member'&&surgeryPenalty>=35);
-    out.push({id:c.id,kind:c.kind,path:c.path,evidenceScore,surgeryScore,categories:[...c.categories].sort(),sources:[...c.sources].sort(),behaviorSourceCount:behavior.length,liveSourceCount:live.length,firstExperimentEligible:eligible,cautions:[...c.cautions],evidence:c.evidence});
+    out.push({id:c.id,kind:c.kind,path:c.path,...(c.root&&{root:c.root}),...(c.relativePath&&{relativePath:c.relativePath}),...(c.fullPath&&{fullPath:c.fullPath}),...(c.sha256&&{sha256:c.sha256}),...(c.size!=null&&{size:c.size}),...(c.archiveRelativePath&&{archiveRelativePath:c.archiveRelativePath}),...(c.memberPath&&{memberPath:c.memberPath}),...(c.memberSha256&&{memberSha256:c.memberSha256}),evidenceScore,surgeryScore,categories:[...c.categories].sort(),sources:[...c.sources].sort(),behaviorSourceCount:behavior.length,liveSourceCount:live.length,firstExperimentEligible:eligible,cautions:[...c.cautions],evidence:c.evidence});
   }
   return out.sort((a,b)=>b.evidenceScore-a.evidenceScore||b.surgeryScore-a.surgeryScore||a.path.localeCompare(b.path));
 }

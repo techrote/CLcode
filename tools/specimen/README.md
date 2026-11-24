@@ -186,3 +186,28 @@ node .\tools\specimen\Fuse-SpecimenEvidence.mjs `
 ```
 
 Review `HYPOTHESES.md`. The fusion report separates evidence relevance from surgery suitability and requires multiple behavioral evidence sources for its first-experiment shortlist. An empty shortlist means gather more evidence; it is not a reason to lower the threshold.
+
+
+## Prepare a baseline-bound surgery packet
+
+After `Fuse-SpecimenEvidence.mjs` produces an eligible first-experiment shortlist, bind one candidate to the exact hashed baseline capture before authoring a patch:
+
+```powershell
+$packet = Join-Path $env:USERPROFILE 'clcode-specimen-lab\experiments\exp-001'
+node .\tools\specimen\Prepare-SurgeryExperiment.mjs `
+  --hypotheses "$env:USERPROFILE\clcode-specimen-lab\maps\fusion\hypotheses.json" `
+  --baseline "$env:USERPROFILE\clcode-specimen-lab\captures\baseline-..." `
+  --rank 1 `
+  --objective 'Test one principal-control hypothesis.' `
+  --out $packet
+```
+
+Run the packet self-test before real use:
+
+```powershell
+node .\tools\specimen\Test-SurgeryExperimentPacket.mjs
+```
+
+The generator refuses ineligible hypotheses, stale/missing baseline hashes, ambiguous file bindings and ASAR-member candidates. It writes `experiment.json`, a hash-pinned `patch.json` skeleton and `PACKET.md`; it does **not** modify the specimen.
+
+See [SPECIMEN-EXPERIMENT-PACKET-001](../../docs/SPECIMEN-EXPERIMENT-PACKET-001.md).
