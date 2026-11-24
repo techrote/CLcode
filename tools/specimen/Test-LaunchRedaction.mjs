@@ -15,6 +15,9 @@ assert(!clean.includes('verysecretvalue'));
 assert(!clean.includes('onetimetoken'));
 assert.match(clean,/\[redacted\]/);
 
+assert(!sanitizeCommandLine('https://synthetic-user:synthetic-pass@example.invalid/path').includes('synthetic-pass'));
+assert(!sanitizeCommandLine('https://synthetic-user:synthetic-pass@example.invalid/path').includes('synthetic-user'));
+
 const event=safeLaunchEvent({processId:'42',parentProcessId:'7',name:'claude-code.exe',executablePath:'C:\\App\\claude-code.exe',commandLine:'--access-token abcdefghijk'});
 assert.equal(event.processId,42);
 assert(!event.commandLine.includes('abcdefghijk'));

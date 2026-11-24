@@ -2,7 +2,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve, sep } from 'node:path';
 
-function parseCsv(text) {
+function parseCsv(text, required) {
+  text = text.replace(/^\uFEFF/, '');
   const rows = [];
   let row = [], cell = '', quoted = false;
   for (let i = 0; i < text.length; i++) {
@@ -17,8 +18,9 @@ function parseCsv(text) {
     else cell += ch;
   }
   if (cell.length || row.length) { row.push(cell); rows.push(row); }
-  if (rows.length < 1) return [];
+  if (rows.length < 1) throw new Error('CSV has no header.');
   const headers = rows.shift();
+  for (const name of required) if (!headers.includes(name)) throw new Error(`CSV missing required header: ${name}`);
   return rows.filter(r => r.some(x => x !== '')).map(r => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? ''])));
 }
 
@@ -33,8 +35,8 @@ const processFile = join(observationDir, 'process-samples.csv');
 const connectionFile = join(observationDir, 'connections.csv');
 if (!existsSync(processFile) || !existsSync(connectionFile)) throw new Error('Observation directory must contain process-samples.csv and connections.csv.');
 
-const procRows = parseCsv(readFileSync(processFile, 'utf8'));
-const connRows = parseCsv(readFileSync(connectionFile, 'utf8'));
+const procRows = parseCsv(readFileSync(processFile, 'utf8'), ['TimestampUtc','ProcessId','ParentProcessId','Name','ExecutablePath']);
+const connRows = parseCsv(readFileSync(connectionFile, 'utf8'), ['TimestampUtc','OwningProcess','LocalAddress','LocalPort','RemoteAddress','RemotePort','State']);
 const processByPid = new Map();
 for (const row of procRows) {
   const pid = Number(row.ProcessId);

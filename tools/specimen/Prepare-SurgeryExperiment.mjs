@@ -23,6 +23,7 @@ function norm(value){return String(value??'').replaceAll('\\','/').replace(/\/+/
 function safeId(value){return String(value??'experiment').toLowerCase().replace(/[^a-z0-9._-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,72)||'experiment';}
 function ps(value){return `'${String(value??'').replaceAll("'", "''")}'`;}
 function parseCsv(text){
+  text=text.replace(/^\uFEFF/,'');
   const rows=[]; let row=[], field='', quoted=false;
   const pushField=()=>{row.push(field);field='';};
   const pushRow=()=>{if(row.length||field.length){pushField();rows.push(row);row=[];}};
@@ -46,7 +47,7 @@ function loadBaseline(input){
   const resolved=resolve(input); let dir=resolved, manifestPath;
   if(existsSync(resolved)&&statSync(resolved).isFile()){manifestPath=resolved;dir=dirname(resolved);} else manifestPath=join(resolved,'manifest.json');
   if(!existsSync(manifestPath))throw new Error(`Baseline manifest not found: ${manifestPath}`);
-  const manifest=JSON.parse(readFileSync(manifestPath,'utf8'));
+  const manifest=JSON.parse(readFileSync(manifestPath,'utf8').replace(/^\uFEFF/,''));
   if(manifest.hashesSkipped)throw new Error('Baseline capture skipped file hashes; cannot bind a surgery packet safely.');
   const csvPath=join(dir,manifest.filesCsv??'files.csv');
   if(!existsSync(csvPath))throw new Error(`Baseline file inventory not found: ${csvPath}`);
@@ -74,7 +75,8 @@ function bindCandidate(candidate, baseline){
   const row=matches[0];
   if(row.HashError)throw new Error(`Baseline hash error for target: ${row.HashError}`);
   if(!validSha(row.SHA256))throw new Error('Baseline target has no valid SHA-256.');
-  if(candidate.sha256&&norm(candidate.sha256)!==norm(row.SHA256))throw new Error(`Fused candidate SHA-256 differs from baseline capture: ${candidate.sha256} vs ${row.SHA256}.`);
+  if(!validSha(candidate.sha256))throw new Error('Fused candidate has no valid SHA-256; cannot bind evidence to baseline.');
+  if(norm(candidate.sha256)!==norm(row.SHA256))throw new Error(`Fused candidate SHA-256 differs from baseline capture: ${candidate.sha256} vs ${row.SHA256}.`);
   const root=row.Root, rel=row.RelativePath.replaceAll('\\','/');
   if(isAbsolute(rel)||rel.split('/').includes('..'))throw new Error('Baseline relative target is unsafe.');
   return {root,relativePath:rel,sha256:row.SHA256.toLowerCase(),length:Number(row.Length)||null,lastWriteTimeUtc:row.LastWriteTimeUtc||null};
@@ -86,7 +88,7 @@ function main(){
   const hypothesesPath=resolve(opts.hypotheses);if(!existsSync(hypothesesPath))throw new Error('Hypotheses file not found.');
   const hypotheses=JSON.parse(readFileSync(hypothesesPath,'utf8'));
   const candidate=selectCandidate(hypotheses,opts), baseline=loadBaseline(opts.baseline), target=bindCandidate(candidate,baseline);
-  const outDir=resolve(opts.out);mkdirSync(outDir,{recursive:true});
+  const outDir=resolve(opts.out);mkdirSync(dirname(outDir),{recursive:true});mkdirSync(outDir);
   const stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
   const id=safeId(`exp-${stamp}-${basename(candidate.path).replace(/\.[^.]+$/,'')}`);
   const packet={schemaVersion:1,id,createdAtUtc:new Date().toISOString(),objective:String(opts.objective).trim(),hypothesesFile:hypothesesPath,hypothesesCreatedAtUtc:hypotheses.createdAtUtc??null,candidate:{id:candidate.id,kind:candidate.kind,path:candidate.path,evidenceScore:candidate.evidenceScore,surgeryScore:candidate.surgeryScore,categories:candidate.categories??[],sources:candidate.sources??[],behaviorSourceCount:candidate.behaviorSourceCount??null,liveSourceCount:candidate.liveSourceCount??null,cautions:candidate.cautions??[],evidence:candidate.evidence??[]},baseline:{captureId:baseline.manifest.captureId??null,directory:baseline.dir,createdAtUtc:baseline.manifest.createdAtUtc??null},target,readyForPatchAuthoring:true,note:'This packet binds evidence to a captured target hash. It does not authorize applying a patch.'};

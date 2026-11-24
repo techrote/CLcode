@@ -1,13 +1,9 @@
-import { closeSync, openSync, readFileSync, readSync, realpathSync, statSync } from 'node:fs';
-import { relative, resolve, sep } from 'node:path';
+import { closeSync, fstatSync, openSync, readSync, realpathSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { isWithin as inside } from './specimen-path-guard.mjs';
 import { createHash } from 'node:crypto';
 
 const MAX_HEADER_BYTES = 64 * 1024 * 1024;
-
-function inside(root, candidate) {
-  const rel = relative(root, candidate);
-  return rel === '' || (!rel.startsWith('..') && !rel.startsWith(sep));
-}
 
 export function readAsarHeader(archive) {
   const file = resolve(archive);
@@ -77,14 +73,25 @@ export function listAsarEntries(headerInfo) {
 
 export function readAsarEntry(headerInfo, entry, { maxBytes = 64 * 1024 * 1024 } = {}) {
   if (!entry || entry.type !== 'file') throw new Error('Only ASAR file entries can be read.');
+  if (!Number.isSafeInteger(entry.size) || entry.size < 0 || !Number.isSafeInteger(maxBytes) || maxBytes < 0) throw new Error('Invalid ASAR member size or read bound.');
   if (entry.size > maxBytes) throw new Error(`ASAR member exceeds read bound (${entry.size} > ${maxBytes}): ${entry.path}`);
   if (entry.unpacked) {
     const root = realpathSync(`${headerInfo.archive}.unpacked`);
-    const candidate = resolve(root, ...entry.path.split('/'));
+    const parts = String(entry.path).split('/');
+    if (parts.some(p => !p || p === '.' || p === '..' || /[\\:\x00]/.test(p))) throw new Error('Unsafe ASAR unpacked member path.');
+    const candidate = resolve(root, ...parts);
     if (!inside(root, candidate)) throw new Error(`ASAR unpacked member escapes root: ${entry.path}`);
     const actual = realpathSync(candidate);
     if (!inside(root, actual)) throw new Error(`ASAR unpacked member resolves outside root: ${entry.path}`);
-    return readFileSync(actual);
+    const fd = openSync(actual, 'r');
+    try {
+      const st = fstatSync(fd);
+      if (!st.isFile() || st.size !== entry.size || st.size > maxBytes) throw new Error('ASAR unpacked physical size differs from declared size or read bound.');
+      const buffer = Buffer.alloc(entry.size);
+      if (entry.size && readSync(fd, buffer, 0, entry.size, 0) !== entry.size) throw new Error('Unable to read complete ASAR unpacked member.');
+      if (fstatSync(fd).size !== entry.size) throw new Error('ASAR unpacked member changed during read.');
+      return buffer;
+    } finally { closeSync(fd); }
   }
   const offsetBig = BigInt(entry.offset);
   if (offsetBig > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`ASAR member offset is too large for Node random access: ${entry.path}`);
