@@ -28,7 +28,7 @@ test('spawn admission is not abandoned by the generic request timeout', async ()
     assert.equal(admitted.status, 'running');
     await assert.rejects(
       c.request('spawn', { delayMs: 80 }, { timeoutMs: 10 }),
-      error => error instanceof RuntimeProtocolError && error.code === 'timeout'
+      /spawn requests cannot use a client-side timeout/
     );
   } finally { await c.close(); }
 });

@@ -75,6 +75,12 @@
       "name": "SPECIMEN-ASAR-HARDENING-001",
       "branch": "specimen/006-asar-explicit-archive",
       "sha": "df3383d923b7b41bcb83c91f7cccf5f0b1772317"
+    },
+    {
+      "pr": 16,
+      "name": "RUNTIME-ADMISSION-HARDENING-002",
+      "branch": "runtime/005-admission-timeout-integrity",
+      "sha": "12eca2de12744dc6a8d86068f0841f7cd95387ec"
     }
   ]
 }
