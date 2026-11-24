@@ -1,0 +1,7 @@
+# Local CLcode specimen-lab evidence. Keep captures and proprietary specimen data out of Git.
+.clcode-local/
+lab/
+evidence/
+captures/
+specimen-captures/
+*.clcode-local.json
