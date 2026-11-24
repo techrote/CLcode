@@ -70,13 +70,17 @@ export class ScopedTools {
   }
 
   static async create(projectRoot, options = {}) {
-    const { stdout } = await execFileAsync('git', ['rev-parse', '--show-toplevel'], { cwd: projectRoot, timeout: 10_000, windowsHide: true });
+    // Admission-time Git probes are still subprocesses controlled by repository
+    // configuration (for example core.fsmonitor). Never expose provider/cloud
+    // credentials before the ordinary tool subprocess boundary is established.
+    const env = childEnv();
+    const { stdout } = await execFileAsync('git', ['rev-parse', '--show-toplevel'], { cwd: projectRoot, timeout: 10_000, windowsHide: true, env });
     const gitRoot = realpathSync(stdout.trim());
     const requested = realpathSync(projectRoot);
     const sameRoot = process.platform === 'win32' ? gitRoot.toLowerCase() === requested.toLowerCase() : gitRoot === requested;
     if (!sameRoot) throw new Error(`Project root must be the Git top-level directory: ${gitRoot}`);
     if (options.requireClean !== false) {
-      const status = await execFileAsync('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: gitRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8' });
+      const status = await execFileAsync('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: gitRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
       if (String(status.stdout ?? '').trim()) throw new Error('Project working tree must be clean before an agent run; commit, stash or discard existing changes first.');
     }
     return new ScopedTools(gitRoot, options);
