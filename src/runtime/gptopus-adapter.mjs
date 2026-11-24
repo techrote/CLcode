@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { childEnv } from './tools.mjs';
 
 const EXPECTED_DONOR = '849627463c3e2be660f9d24976320b072c107b34';
 
@@ -21,12 +22,16 @@ export class GPTopusAdapter {
   async load() {
     if (this.loaded) return this.loaded;
     if (this.expectedSha) {
+      // Local Git configuration is outside the pinned donor commit and may run
+      // helpers such as core.fsmonitor. Integrity probes therefore use the same
+      // credential-scrubbed environment as project tool subprocesses.
+      const gitEnv = childEnv(this.env);
       let actual;
-      try { actual = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: this.root, encoding: 'utf8', windowsHide: true }).trim(); }
+      try { actual = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: this.root, encoding: 'utf8', windowsHide: true, env: gitEnv }).trim(); }
       catch { throw new Error('GPTopus checkout is not a readable Git worktree; cannot verify donor pin.'); }
       if (actual !== this.expectedSha) throw new Error(`GPTopus donor SHA mismatch: expected ${this.expectedSha}, got ${actual}.`);
       let dirty;
-      try { dirty = execFileSync('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: this.root, encoding: 'utf8', windowsHide: true }).trim(); }
+      try { dirty = execFileSync('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: this.root, encoding: 'utf8', windowsHide: true, env: gitEnv }).trim(); }
       catch { throw new Error('GPTopus checkout status is unreadable; cannot verify donor source integrity.'); }
       if (dirty) throw new Error('GPTopus donor working tree is not clean; refusing to load source that differs from the pinned commit.');
     }
