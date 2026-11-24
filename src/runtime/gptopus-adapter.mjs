@@ -62,17 +62,28 @@ export class GPTopusAdapter {
 
   async unpack(value) {
     if (!value?.paged) return value;
-    if (value.pages > 256 || value.length > 4_000_000) throw new Error('GPTopus response exceeds CLcode paging bound.');
-    const { dispatch } = await this.load();
-    let joined = '';
-    for (let page = 0; page < value.pages; page++) {
-      joined += (await dispatch('page', { id: value.id, page }, { env: this.env })).chunk;
+    try {
+      if (!Number.isInteger(value.pages) || value.pages < 1 || value.pages > 256 || !Number.isInteger(value.length) || value.length < 1 || value.length > 4_000_000) throw new Error('GPTopus response exceeds CLcode paging bound or has invalid page metadata.');
+      const { dispatch } = await this.load();
+      let joined = '';
+      for (let page = 0; page < value.pages; page++) {
+        const chunk = (await dispatch('page', { id: value.id, page }, { env: this.env })).chunk;
+        if (typeof chunk !== 'string' || joined.length + chunk.length > value.length) throw new Error('GPTopus page is invalid.');
+        joined += chunk;
+      }
+      if (joined.length !== value.length) throw new Error('GPTopus paged response was incomplete.');
+      const decoded = JSON.parse(joined);
+      if (decoded?.id !== value.id || decoded?.status !== value.status) throw new Error('GPTopus paged response identity differs from its envelope.');
+      return decoded;
+    } catch (cause) {
+      const error = new Error('GPTopus accepted response could not be reconstructed: ' + String(cause?.message ?? cause), { cause });
+      error.responseId = value.id;
+      error.usageDisposition = 'ambiguous';
+      throw error;
     }
-    if (joined.length !== value.length) throw new Error('GPTopus paged response was incomplete.');
-    return JSON.parse(joined);
   }
 
-  async create({ worker, input, instructions, tools, effort, previousResponseId, agentId }) {
+  async create({ worker, input, instructions, tools, effort, previousResponseId, agentId, requestId }) {
     const { dispatch } = await this.load();
     const settings = await this.settings(worker);
     if (settings.tools === false && tools.length) throw new Error(`${worker} does not support tools.`);
@@ -86,6 +97,7 @@ export class GPTopusAdapter {
       ...(previousResponseId && { previous_response_id: previousResponseId }),
       ...(settings.service_tier && { service_tier: settings.service_tier }),
       agent_id: agentId,
+      ...(requestId && { request_id: requestId }),
     }, { env: this.env }));
   }
 

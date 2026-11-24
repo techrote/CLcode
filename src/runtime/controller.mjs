@@ -40,6 +40,7 @@ export class RunController {
 
     const started = Date.now();
     let step = 0;
+    let attempt = 0;
     let previousResponseId;
     let input = task;
     let currentResponseId = null;
@@ -51,7 +52,7 @@ export class RunController {
     this.store.init({
       runId, status: 'running', phase: 'admitted', projectRoot: tools.projectRoot,
       worker: settings.name, model: settings.model, provider: settings.provider ?? 'openai-responses',
-      effort: effort ?? settings.effort_policy?.default ?? null, maxSteps, maxMinutes, task: task.slice(0, 4000),
+      effort: effort ?? settings.effort_policy?.default ?? null, requestedServiceTier: settings.service_tier ?? null, maxSteps, maxMinutes, task: task.slice(0, 4000),
     });
     this.store.event(runId, 'run.started', { projectRoot: tools.projectRoot, worker: settings.name, model: settings.model });
 
@@ -64,6 +65,7 @@ export class RunController {
         : { status: 'cancel_unknown' };
       const confirmed = Boolean(currentResponseId && outcome?.id === currentResponseId && outcome.status === 'cancelled' && (!settings.provider || settings.provider === 'openai-responses' || settings.provider === 'openai'));
       this.store.event(runId, confirmed ? 'model.cancelled' : 'model.cancel_unconfirmed', { responseId: currentResponseId, outcome });
+      this.store.patchSummary(runId, { providerState: confirmed ? 'cancelled' : 'unknown' });
       return confirmed;
     };
 
@@ -92,6 +94,13 @@ export class RunController {
       const final = this.store.patchSummary(runId, { status, phase: status, finishedAt: new Date().toISOString(), ...patch });
       this.store.event(runId, `run.${status}`, patch);
       return this.store.readSummary(runId);
+    };
+
+    const providerUnknown = (operation, error, requestId, responseId = currentResponseId) => {
+      const reason = String(error?.message ?? error).slice(0, 1600);
+      const patch = { reason, requestId, currentResponseId: responseId ?? null, providerState: 'unknown', usageDisposition: 'ambiguous' };
+      this.store.event(runId, 'model.outcome_unknown', { operation, step, ...patch, responseId: responseId ?? null });
+      return finish('incomplete', patch);
     };
 
     const executeTool = async (call) => {
@@ -125,16 +134,29 @@ export class RunController {
         }
 
         step++;
-        this.store.patchSummary(runId, { phase: 'model', step, currentResponseId: null });
-        this.store.event(runId, 'model.requested', { step, previousResponseId: previousResponseId ?? null });
+        const requestId = `${String(runId).toUpperCase()}:${++attempt}`;
+        this.store.patchSummary(runId, { phase: 'model', step, currentResponseId: null, requestId, providerState: 'submitting' });
+        this.store.event(runId, 'model.requested', { step, requestId, previousResponseId: previousResponseId ?? null });
 
-        let response = await this.provider.create({
-          worker: settings.name, input, instructions: SYSTEM, tools: tools.schemas(),
-          effort: effort ?? settings.effort_policy?.default, previousResponseId, agentId: runId,
-        });
-        currentResponseId = response.id ?? null;
-        this.store.patchSummary(runId, { currentResponseId });
-        this.store.event(runId, 'model.accepted', { step, responseId: currentResponseId, status: response.status });
+        let response;
+        try {
+          response = await this.provider.create({
+            worker: settings.name, input, instructions: SYSTEM, tools: tools.schemas(),
+            effort: effort ?? settings.effort_policy?.default, previousResponseId, agentId: runId, requestId,
+          });
+        } catch (error) {
+          if (['not_started', 'rejected'].includes(error?.usageDisposition)) {
+            const patch = { reason: String(error?.message ?? error).slice(0, 1600), requestId, providerState: error.usageDisposition, usageDisposition: error.usageDisposition, currentResponseId: null };
+            this.store.event(runId, 'model.request_rejected', { step, ...patch });
+            return finish('failed', patch);
+          }
+          return providerUnknown('create', error, requestId, error?.responseId);
+        }
+        if (typeof response?.id !== 'string' || !response.id) return providerUnknown('create', new Error('Provider returned no response ID.'), requestId);
+        currentResponseId = response.id;
+        this.store.patchSummary(runId, { currentResponseId, providerState: response.status, currentResponseModel: response.model ?? null });
+        this.store.event(runId, 'model.accepted', { step, requestId, responseId: currentResponseId, status: response.status,
+          model: response.model ?? null, configuredModel: settings.model, substitutedFrom: response.substitutedFrom ?? null, provider: response.provider ?? settings.provider ?? 'openai-responses', serviceTier: response.serviceTier ?? null });
 
         let hardRestart = null;
         while (response.status === 'in_progress' || response.status === 'queued') {
@@ -170,7 +192,12 @@ export class RunController {
             break;
           }
           if (lateSteer.length) deferredSteer.push(...lateSteer);
-          response = await this.provider.poll({ worker: settings.name, id: currentResponseId });
+          try {
+            response = await this.provider.poll({ worker: settings.name, id: currentResponseId });
+            if (response?.id !== currentResponseId) throw new Error('Poll returned a different response ID.');
+          } catch (error) {
+            return providerUnknown('poll', error, requestId);
+          }
         }
 
         if (hardRestart) {
@@ -182,12 +209,15 @@ export class RunController {
           continue;
         }
 
-        if (!FINAL.has(response.status)) throw new Error(`Unexpected provider status ${response.status}.`);
+        if (!FINAL.has(response.status)) return providerUnknown('response', new Error(`Unexpected provider status ${response.status}.`), requestId);
         this.store.event(runId, 'model.completed', {
           step, responseId: response.id, status: response.status, usage: response.usage ?? null,
-          estimatedUsd: response.estimatedUsd ?? null, text: String(response.text ?? '').slice(0, 12000),
+          estimatedUsd: response.estimatedUsd ?? null, usageStatus: response.usageStatus ?? (response.usage ? 'verified' : 'unknown'), priceStatus: response.priceStatus ?? null,
+          model: response.model ?? null, configuredModel: settings.model, substitutedFrom: response.substitutedFrom ?? null, provider: response.provider ?? settings.provider ?? 'openai-responses', serviceTier: response.serviceTier ?? null,
+          text: String(response.text ?? '').slice(0, 12000),
         });
-        if (response.status !== 'completed') return finish('failed', { reason: response.reason ?? `Provider ended with ${response.status}.` });
+        this.store.patchSummary(runId, { providerState: response.status, lastResponseId: response.id, lastResponseModel: response.model ?? null, lastResponseServiceTier: response.serviceTier ?? null, currentResponseId: null });
+        if (response.status !== 'completed') return finish(response.status, { reason: response.reason ?? `Provider ended with ${response.status}.` });
 
         const calls = normalizeCalls(response);
         previousResponseId = response.id;
