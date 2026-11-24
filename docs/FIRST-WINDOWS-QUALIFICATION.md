@@ -1,6 +1,6 @@
 # FIRST-WINDOWS-QUALIFIED-001 — qualification record
 
-Status: **REFRESHED; EXACT INTEGRATED NATIVE-WINDOWS QUALIFICATION PENDING.**
+Status: **SOURCE/MECHANICAL QUALIFICATION PASS — READY FOR OWNER PHYSICAL/LIVE EVALUATION, subject to the closure commit itself retaining a green integrated native-Windows run.**
 
 Single evaluator: PR #40 / `integration/first-windows-qualified-001`.
 
@@ -8,7 +8,7 @@ Single evaluator: PR #40 / `integration/first-windows-qualified-001`.
 
 - Runtime PR #37 — `8f85b5bcf994f988f1be9d3a885086660d146a82`
   - exact-head serial qualification: **75/75 Linux PASS and 75/75 native Windows PASS**
-  - evidence: https://github.com/techrote/CLcode/actions/runs/45454567372
+  - runtime evidence: https://github.com/techrote/CLcode/actions/runs/45454567372
   - includes closure of the reproduced Windows 8.3 path-identity and Git fsmonitor defects.
 - Specimen PR #39 — `871c210dae12334d63810efe3152e5e7f2e144ad`
   - native Windows specimen qualification: https://github.com/techrote/CLcode/actions/runs/45452653193
@@ -16,39 +16,67 @@ Single evaluator: PR #40 / `integration/first-windows-qualified-001`.
   - native-Node launch repair retained.
 - GPTopus donor pin — `849627463c3e2be660f9d24976320b072c107b34`.
 
-## Historical integrated failure retained
+## Refreshed integrated native-Windows qualification
 
-Native Windows run https://github.com/techrote/CLcode/actions/runs/45453533944 tested an earlier evaluator/runtime and reproduced:
+Refreshed evaluator source under test:
+
+`eaa3d9dc2de5b1b821c3d4c1009816c0a6746d32`
+
+Native Windows evidence:
+
+- run: https://github.com/techrote/CLcode/actions/runs/45466461508
+- job: `integrated-native-windows`
+- runner image: Windows Server 2025
+- Git: `2.56.1.windows.1`
+- Node: `22.16.0` (workflow-pinned)
+- preserved preflight artifact: `first-windows-preflight-eaa3d9dc2de5b1b821c3d4c1009816c0a6746d32`, artifact ID `14955029287`.
+
+Observed exact-run gates:
+
+- **34/34 component ancestry pins PASS**, including current PR #37 and PR #39 heads;
+- full runtime/Desktop suite PASS;
+- explicit complete serial runtime/adversarial qualification PASS;
+- specimen static map PASS;
+- ASAR internal map PASS;
+- ASAR integrity PASS;
+- evidence fusion PASS;
+- surgery experiment packet PASS;
+- runtime correlation/observation PASS;
+- guarded patch/apply/rollback PASS;
+- launch redaction/filter/lifecycle PASS;
+- PowerShell 5.1 specimen-lab tooling PASS;
+- evaluator-specific preflight regression is part of the runtime/Desktop test corpus;
+- overall `FIRST-WINDOWS-001 preflight: PASS`.
+
+The exact runtime-authoritative blobs in the evaluator were mechanically verified byte-for-byte against PR #37, and the PR #39 specimen-authoritative blobs were mechanically verified byte-for-byte against PR #39. PR #37, PR #39 and PR #25 are all real ancestors of the evaluator.
+
+## Historical integrated blocker — CLOSED
+
+Earlier native Windows run https://github.com/techrote/CLcode/actions/runs/45453533944 reproduced:
 - Windows 8.3 alias versus long-path admission mismatch;
 - Git fsmonitor positive-control portability defects;
 - downstream serial cancellation caused by the admission failure.
 
-Those defects were subsequently closed in canonical runtime PR #37. The standalone #37 PASS is **not** treated as proof that this refreshed combined evaluator passes.
+Those defects were closed in canonical runtime PR #37 and are no longer blockers in the refreshed integrated evaluator.
 
-## Integrated qualification contract
+## Closure/freeze rule
 
-The exact refreshed PR #40 HEAD must pass `node scripts/first-windows-check.mjs` on native Windows.
+This file is part of a documentation-only closure commit after the successful refreshed-source run above. The closure commit must itself pass the same `FIRST-WINDOWS qualified integrated` native-Windows workflow before it is frozen.
 
-The evaluator preflight now performs both:
-1. the canonical full runtime/Desktop runner; and
-2. a second complete **serial** `test/*.test.mjs` pass with `--test-concurrency=1`.
+The exact frozen evaluator SHA and its final confirmation run are recorded in PR #40 metadata after that run succeeds. They are not self-embedded here because changing this file would itself create another unqualified commit.
 
-It also runs:
-- component ancestry/pin verification;
-- specimen static map;
-- ASAR internal map;
-- ASAR integrity;
-- evidence fusion;
-- surgery experiment packet;
-- runtime observation/correlation;
-- launch observer/redaction/lifecycle;
-- guarded patch/apply/rollback;
-- PowerShell 5.1 specimen tooling.
-
-The #37 test corpus supplies the native Windows path-identity, fsmonitor and descendant-process cancellation regressions. The evaluator-specific preflight regression is itself part of the test corpus.
-
-Only an exact combined native-Windows PASS may move this record to **READY FOR OWNER PHYSICAL/LIVE EVALUATION**.
+After the closure run succeeds, **do not modify the frozen evaluator source merely for cleanup.**
 
 ## Acceptance boundary
 
-Even after mechanical/source qualification, E01/E02/E06/E07/E08 remain NOT RUN. Installed-Desktop evidence, live provider behavior, first reversible specimen surgery and observed absence of Anthropic inference are separate owner/live gates.
+This qualification establishes only source composition and mechanical/native-Windows readiness.
+
+It does **not** make E01/E02/E06/E07/E08 PASS. The following still require owner physical/live evaluation:
+
+- real GPTopus standalone execution;
+- real provider request with Claude Code absent;
+- real non-Claude Read → Edit → Test → verified local commit;
+- real installed Desktop specimen evidence;
+- first evidence-bound reversible surgery;
+- eventual graphical/transplanted Desktop qualification;
+- observed absence of Anthropic inference for the target workflow.
