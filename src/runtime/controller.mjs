@@ -96,11 +96,30 @@ export class RunController {
       return this.store.readSummary(runId);
     };
 
+    const suspendUnknown = (reason, patch = {}) => {
+      const next = this.store.patchSummary(runId, {
+        status: 'running',
+        phase: 'provider_unknown',
+        finishedAt: null,
+        reason: String(reason ?? 'Provider execution state is unknown.').slice(0, 1600),
+        providerState: 'unknown',
+        remoteExecutionMayContinue: true,
+        ...patch,
+      });
+      this.store.event(runId, 'run.provider_unknown', {
+        reason: next.reason,
+        providerState: 'unknown',
+        remoteExecutionMayContinue: true,
+        ...patch,
+      });
+      return this.store.readSummary(runId);
+    };
+
     const providerUnknown = (operation, error, requestId, responseId = currentResponseId) => {
       const reason = String(error?.message ?? error).slice(0, 1600);
-      const patch = { reason, requestId, currentResponseId: responseId ?? null, providerState: 'unknown', usageDisposition: 'ambiguous' };
-      this.store.event(runId, 'model.outcome_unknown', { operation, step, ...patch, responseId: responseId ?? null });
-      return finish('incomplete', patch);
+      const patch = { requestId, currentResponseId: responseId ?? null, usageDisposition: 'ambiguous' };
+      this.store.event(runId, 'model.outcome_unknown', { operation, step, reason, providerState: 'unknown', ...patch, responseId: responseId ?? null });
+      return suspendUnknown(reason, patch);
     };
 
     const executeTool = async (call) => {
@@ -161,16 +180,16 @@ export class RunController {
         let hardRestart = null;
         while (response.status === 'in_progress' || response.status === 'queued') {
           if (checkDeadline()) {
-            if (!await cancelActive()) return finish('incomplete', { reason: 'Run deadline reached; upstream cancellation is unconfirmed.', providerState: 'unknown' });
+            if (!await cancelActive()) return suspendUnknown('Run deadline reached; upstream cancellation is unconfirmed.', { deadlineReached: true, currentResponseId });
             return finish('time_limit', { reason: `Exceeded ${maxMinutes} minute run limit.`, currentResponseId: null });
           }
           const steer = await applyControls({ whileResponse: true });
           if (cancelled) return cancellationConfirmed
             ? finish('cancelled', { reason: 'Cancelled by operator during model response.', currentResponseId: null })
-            : finish('incomplete', { reason: 'Operator requested cancellation; upstream cancellation is unconfirmed.', providerState: 'unknown' });
+            : suspendUnknown('Operator requested cancellation; upstream cancellation is unconfirmed.', { cancellationRequested: true, currentResponseId });
           const hard = steer.filter(s => s.hard);
           if (hard.length) {
-            if (!await cancelActive()) return finish('incomplete', { reason: 'Hard steering stopped: upstream cancellation is unconfirmed; no replacement request was sent.', providerState: 'unknown' });
+            if (!await cancelActive()) return suspendUnknown('Hard steering stopped: upstream cancellation is unconfirmed; no replacement request was sent.', { hardSteerPending: true, currentResponseId });
             hardRestart = steer;
             this.store.event(runId, 'model.interrupted', { responseId: currentResponseId, reason: 'hard steering' });
             break;
@@ -183,10 +202,10 @@ export class RunController {
           const lateSteer = await applyControls({ whileResponse: true });
           if (cancelled) return cancellationConfirmed
             ? finish('cancelled', { reason: 'Cancelled by operator during model response.', currentResponseId: null })
-            : finish('incomplete', { reason: 'Operator requested cancellation; upstream cancellation is unconfirmed.', providerState: 'unknown' });
+            : suspendUnknown('Operator requested cancellation; upstream cancellation is unconfirmed.', { cancellationRequested: true, currentResponseId });
           const lateHard = lateSteer.filter(s => s.hard);
           if (lateHard.length) {
-            if (!await cancelActive()) return finish('incomplete', { reason: 'Hard steering stopped: upstream cancellation is unconfirmed; no replacement request was sent.', providerState: 'unknown' });
+            if (!await cancelActive()) return suspendUnknown('Hard steering stopped: upstream cancellation is unconfirmed; no replacement request was sent.', { hardSteerPending: true, currentResponseId });
             hardRestart = lateSteer;
             this.store.event(runId, 'model.interrupted', { responseId: currentResponseId, reason: 'hard steering' });
             break;
