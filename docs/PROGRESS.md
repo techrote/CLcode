@@ -1,7 +1,7 @@
 # CLcode — current implementation status
 
 **Recorded:** 2026-11-24  
-**Main baseline before this status update:** `86cf70ec29287268f2176bc6e55963da0ed22e20`
+**Main baseline before this status update:** `03cb98098c45e4a9bc7bfdc0e1a9d5ad29c79eda`
 
 This file records the current engineering state and evidence boundaries. It is not a substitute for [EXPERIMENTS.md](EXPERIMENTS.md): acceptance gates remain authoritative there.
 
@@ -41,6 +41,8 @@ This file records the current engineering state and evidence boundaries. It is n
 | #33 — RUNTIME-RECOVERY-OWNERSHIP-001 | `qual/002-recovery-ownership` / `d84843130477e80d0259f969cdb4fd2eedec5366` | Expose local/unverified/terminal run ownership and admission_unknown reconciliation | Focused regressions; no automatic recovery claimed; inherited by #34 |
 | #34 — RUNTIME-DEFINITIVE-001 | `integration/runtime-definitive-001` / `aa9810ea4ad5a4a51dc16ca2a985996480b2ec24` | Canonical runtime/Desktop candidate combining #31 + journal/recovery + fixture integrity | Parent ancestry and representative blobs verified; exact aggregate suite not rerun here |
 | #35 — SPECIMEN-DEFINITIVE-001 | `integration/specimen-definitive-001` / `35d9a615e034ea6080e77c7d2e39a9a1538a1fbb` | Canonical specimen candidate combining packet flow + PS5.1/path/launch red-team fixes | Parent ancestry and representative blobs verified; exact aggregate suite not rerun here |
+| #36 — RUNTIME-GIT-FILTER-QUAL-001 | `runtime/010-filter-exec-boundary-qual` / `5da7d2d1b197efab149aa3c565af499b88f06053` | Block implicit Git clean/smudge filter execution; resolve Git only from absolute non-project PATH entries | Mechanism reproduced with real Git; focused guards added; complete branch/Windows suite pending |
+| #37 — RUNTIME-DEFINITIVE-FILTER-QUAL-001 | `integration/runtime-definitive-filter-qual` / `73ad622943a1ccb5c718f5a54c435226830944c3` | Serial overlay of #36 onto definitive runtime #34 while retaining journal/recovery/Desktop overlays | Two-parent ancestry/tree consolidation; exact aggregate suite and Windows preflight pending |
 | #2 — PREPASS-01 | `prepass/01-gptopus-extraction-20261123` / `90b521653d13859f29914dbdb8fc807e342711d0` | GPTopus host-independence archaeology | Source-grounded design/reference |
 | #1 — PREPASS-04 | `prepass/04-windows-desktop-20261123` / `c7f356250fe8ff37bca99c0b6023032e73521aea` | Disposable-Windows bootstrap and first Desktop vertical slice plan | Source-grounded plan; physical run not yet performed |
 
@@ -71,7 +73,7 @@ This file records the current engineering state and evidence boundaries. It is n
 - Multi-source hypothesis fusion now combines static surface, ASAR, runtime, launch and integrity evidence into a ranked first-surgery shortlist without treating any one signal as proof.
 - An evidence-bound first-surgery packet now binds an eligible hypothesis to exactly one hashed baseline file and produces a deliberately fail-closed guarded patch skeleton.
 - A guarded surgery layer now exists: exact baseline SHA, exact replacement count, dry-run, external backup, post-write hash verification and receipt-verified rollback.
-- Runtime integrity hardening now requires a clean worktree at admission, commits only files actually edited through CLcode, revalidates touched-file hashes before commit, and uses a Windows process-tree termination plan.
+- Runtime integrity hardening now requires a clean worktree at admission, commits only files actually edited through CLcode, revalidates touched-file hashes before commit, uses a Windows process-tree termination plan, fails closed on active Git `filter=` attributes, and resolves Git from absolute non-project PATH entries.
 - A redacted process-launch tracer now exists to catch short-lived Desktop → embedded-engine launches and their parent/child command-line structure without persisting raw credential-bearing arguments.
 - A single HOLD/evaluator branch now composes the current stacks and includes `scripts/first-windows-check.mjs` plus `docs/FIRST-WINDOWS-001.md` so the first physical session needs one checkout rather than branch switching.
 - The evaluator now carries `docs/FIRST-WINDOWS-COMPONENTS.json`; preflight verifies every recorded component SHA with `git merge-base --is-ancestor`, preventing silent stale-stack evaluation.
@@ -104,6 +106,8 @@ RUNTIME-HARDENING-001 extends the runtime proof with clean-worktree admission, C
 
 DESKTOP-CLIENT-001 is now explicitly stacked on that hardened runtime. The combined development tree passes **22/22 tests** and includes process-client and UI-projection behavior, including the terminal-event final-drain race discovered during testing.
 
+PR #37 is the newest runtime qualification overlay. It preserves PR #34's definitive journal/recovery/Desktop tree and replaces only the four #36-authoritative Git-boundary files. The underlying filter mechanism was reproduced with real Git: the previously hardened commit path could still invoke a configured clean filter, while `check-attr` detects the active filter without executing it. The exact #37 aggregate suite has **not** been rerun in this chat environment.
+
 ### Not yet proved
 
 The following remain **NOT RUN** until physical/live execution:
@@ -130,10 +134,11 @@ The standalone Claude Code CLI remains an implementation reference/dependency on
 
 ## Immediate next engineering targets
 
-1. Use **FIRST-WINDOWS-001 / PR #10 HEAD `78ef61a390ffe7f1c7c19fdce6a2258c0d14dfdf`** as the sole physical-PC evaluator and run `node scripts/first-windows-check.mjs`.
-2. Treat any current-head preflight failure as a development blocker; do not manually bypass it.
-3. Execute E01/E02/E06 plus real Windows process-tree cancellation, PowerShell 5.1 observer, WMI launch-watcher and fixture no-clobber acceptance.
-4. Capture real Desktop baseline/static/ASAR/integrity/runtime/launch evidence, fuse it, and create the baseline-bound surgery packet.
-5. Before applying the first surgery, explicitly qualify remaining host-boundary risks from #31: Git filters/config execution, executable lookup resolution and external file/process replacement races.
-6. Run exactly one evidence-backed reversible Desktop experiment toward replacing Claude as principal controller; recapture/compare and rollback unless a subsequent experiment deliberately depends on the modified state.
-7. Only after hostless + specimen evidence is real should the project promote E07 graphical integration work.
+1. Refresh **FIRST-WINDOWS-001 / PR #10** from runtime definitive #34 to the newer **#37 filter-qualified definitive runtime**, preserving specimen definitive #35 and preflight #25.
+2. Update the evaluator component manifest so #36/#37 are pinned and ancestry-checked; do not silently treat #34 as the final runtime candidate after the Git-filter finding.
+3. Run the exact current-head aggregate preflight on the disposable Windows PC: `node scripts/first-windows-check.mjs`.
+4. Treat any preflight failure as a development blocker; do not manually bypass it.
+5. Execute E01/E02/E06 plus real Windows process-tree cancellation, PowerShell 5.1 observer, WMI launch-watcher and fixture no-clobber acceptance.
+6. Capture real Desktop baseline/static/ASAR/integrity/runtime/launch evidence, fuse it, and create the baseline-bound surgery packet.
+7. Run exactly one evidence-backed reversible Desktop experiment toward replacing Claude as principal controller; recapture/compare and rollback unless a subsequent experiment deliberately depends on the modified state.
+8. Only after hostless + specimen evidence is real should the project promote E07 graphical integration work.
