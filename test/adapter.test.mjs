@@ -17,6 +17,8 @@ test('GPTopus adapter verifies donor pin, clean source and paged bridge contract
     const probe=join(root,'.git','clcode-fsmonitor-probe.sh'), capture=join(root,'.git','clcode-fsmonitor-capture.txt');
     writeFileSync(probe,'#!/bin/sh\nprintf "%s" "${OPENAI_API_KEY-}" > .git/clcode-fsmonitor-capture.txt\nprintf "token\\n"\n'); chmodSync(probe,0o755);
     execFileSync('git',['config','core.fsmonitor',probe],{cwd:root});
+    execFileSync('git',['ls-files','-v','-z'],{cwd:root,env:{...process.env,OPENAI_API_KEY:'synthetic-positive-control'}});
+    assert.equal(readFileSync(capture,'utf8'),'synthetic-positive-control'); rmSync(capture);
     const adapter=new GPTopusAdapter({root,expectedSha:sha,stateDir:join(root,'state'),env:{...process.env,OPENAI_API_KEY:'donor-secret-must-not-leak'}});
     assert.equal((await adapter.listWorkers())[0].name,'fake');
     assert.equal(existsSync(capture),false,'donor integrity probe must not execute repository fsmonitor commands');

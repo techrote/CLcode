@@ -65,7 +65,7 @@ export function resolveExecutable(name, env = process.env, { rejectRoot = null }
 
 export function assertNoExternalGitFilters(gitExecutable, cwd, env = childEnv()) {
   const options = { cwd, windowsHide: true, env, maxBuffer: 16_000_000 };
-  const tracked = execFileSync(gitExecutable, ['--no-optional-locks', 'ls-files', '-z'], options);
+  const tracked = execFileSync(gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'ls-files', '-z'], options);
   if (!tracked?.length) return;
   const output = execFileSync(
     gitExecutable,
@@ -127,12 +127,12 @@ export class ScopedTools {
     const env = childEnv();
     const requested = realpathSync(projectRoot);
     const gitExecutable = resolveExecutable('git', env, { rejectRoot: requested });
-    const { stdout } = await execFileAsync(gitExecutable, ['rev-parse', '--show-toplevel'], { cwd: requested, timeout: 10_000, windowsHide: true, env });
+    const { stdout } = await execFileAsync(gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'rev-parse', '--show-toplevel'], { cwd: requested, timeout: 10_000, windowsHide: true, env });
     const gitRoot = realpathSync(stdout.trim());
     const sameRoot = process.platform === 'win32' ? gitRoot.toLowerCase() === requested.toLowerCase() : gitRoot === requested;
     if (!sameRoot) throw new Error(`Project root must be the Git top-level directory: ${gitRoot}`);
     if (options.requireClean !== false) {
-      const flags = await execFileAsync(gitExecutable, ['ls-files', '-v', '-z'], { cwd: gitRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
+      const flags = await execFileAsync(gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'ls-files', '-v', '-z'], { cwd: gitRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
       if (flags.stdout.split('\0').some(entry => /^[a-zS] /.test(entry))) throw new Error('Project index flags hide worktree changes; clear assume-unchanged or skip-worktree before admission.');
       assertNoExternalGitFilters(gitExecutable, gitRoot, env);
       const status = await execFileAsync(gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--untracked-files=all'], { cwd: gitRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });

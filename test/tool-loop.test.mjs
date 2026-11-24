@@ -104,6 +104,10 @@ test('admission Git probes cannot expose provider credentials to repository hook
     writeFileSync(probe, '#!/bin/sh\nprintf "%s" "${OPENAI_API_KEY-}" > .git/clcode-fsmonitor-capture.txt\nprintf "token\\n"\n');
     chmodSync(probe, 0o755);
     execFileSync('git', ['config', 'core.fsmonitor', probe], { cwd: project });
+    // Establish a positive control: the unguarded index scan really invokes the configured probe.
+    execFileSync('git', ['ls-files', '-v', '-z'], { cwd: project, env: { ...process.env, OPENAI_API_KEY: 'synthetic-positive-control' } });
+    assert.equal(readFileSync(capture, 'utf8'), 'synthetic-positive-control');
+    rmSync(capture);
     process.env.OPENAI_API_KEY = 'admission-secret-must-not-leak';
     const { ScopedTools } = await import('../src/runtime/tools.mjs');
     await ScopedTools.create(project);

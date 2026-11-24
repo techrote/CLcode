@@ -28,11 +28,11 @@ export class GPTopusAdapter {
       const gitEnv = childEnv(this.env);
       const gitExecutable = resolveExecutable('git', gitEnv, { rejectRoot: this.root });
       let actual;
-      try { actual = execFileSync(gitExecutable, ['rev-parse', 'HEAD'], { cwd: this.root, encoding: 'utf8', windowsHide: true, env: gitEnv }).trim(); }
+      try { actual = execFileSync(gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'rev-parse', 'HEAD'], { cwd: this.root, encoding: 'utf8', windowsHide: true, env: gitEnv }).trim(); }
       catch { throw new Error('GPTopus checkout is not a readable Git worktree; cannot verify donor pin.'); }
       if (actual !== this.expectedSha) throw new Error(`GPTopus donor SHA mismatch: expected ${this.expectedSha}, got ${actual}.`);
       let indexFlags;
-      try { indexFlags = execFileSync(gitExecutable, ['ls-files', '-v', '-z'], { cwd: this.root, encoding: 'utf8', windowsHide: true, env: gitEnv }); }
+      try { indexFlags = execFileSync(gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'ls-files', '-v', '-z'], { cwd: this.root, encoding: 'utf8', windowsHide: true, env: gitEnv }); }
       catch { throw new Error('GPTopus donor index is unreadable.'); }
       if (indexFlags.split('\0').some(entry => /^[a-zS] /.test(entry))) throw new Error('GPTopus donor index flags hide worktree changes; use a full clean checkout without assume-unchanged or skip-worktree.');
       assertNoExternalGitFilters(gitExecutable, this.root, gitEnv);
