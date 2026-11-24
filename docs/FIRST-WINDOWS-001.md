@@ -32,6 +32,7 @@ Expected before proceeding:
 - specimen map self-test PASS;
 - ASAR internal map self-test PASS;
 - ASAR integrity self-test PASS;
+- evidence-fusion self-test PASS;
 - runtime-correlation self-test PASS;
 - guarded patch apply/rollback self-test PASS;
 - launch-redaction/filter self-test PASS;
@@ -132,6 +133,22 @@ node .\tools\specimen\Analyze-RuntimeObservation.mjs `
 
 The useful output is a ranked hypothesis map: principal-model/control candidates, process ancestry, embedded-engine launch structure, auth/quota candidates, IPC candidates, and which processes owned outbound connections. None of those facts alone prove behavioral ownership.
 
+
+Fuse the available evidence products before selecting a first experiment:
+
+```powershell
+$fusion = Join-Path $env:USERPROFILE 'clcode-specimen-lab\maps\fusion'
+node .\tools\specimen\Fuse-SpecimenEvidence.mjs `
+  --surface (Join-Path $mapRoot 'map.json') `
+  --asar (Join-Path $asarMap 'asar-map.json') `
+  --runtime 'C:\Users\YOU\clcode-specimen-lab\observations\runtime-...\runtime-summary.json' `
+  --launch 'C:\Users\YOU\clcode-specimen-lab\launches\launch-...\summary.json' `
+  --integrity "$env:USERPROFILE\clcode-specimen-lab\maps\asar-integrity.json" `
+  --out $fusion
+```
+
+Review `HYPOTHESES.md`. The report separates evidence relevance from surgery suitability. If the first-experiment shortlist is empty, gather more runtime/launch evidence rather than lowering the multi-source threshold.
+
 ## 5. Hostless model acceptance
 
 ### E01 — standalone GPTopus panel
@@ -176,7 +193,7 @@ Also perform one cancellation test with a child process and verify the complete 
 
 ## 6. First Desktop surgery
 
-Do not choose a patch merely because a string looks interesting. Select one hypothesis supported by at least two evidence sources: static map, process/runtime observation, launch ancestry, or network ownership.
+Do not choose a patch merely because a string looks interesting. Start from the fused `HYPOTHESES.md` shortlist and select one hypothesis supported by at least two behavioral evidence sources. Treat the fusion score as triage, not proof.
 
 Create a surgery ledger entry, then generate a hash-pinned patch template:
 

@@ -93,6 +93,12 @@
       "name": "SPECIMEN-ASAR-INTEGRITY-001",
       "branch": "specimen/006-asar-integrity",
       "sha": "73e36c48635567336407e5a8ad271d81567e457f"
+    },
+    {
+      "pr": 19,
+      "name": "SPECIMEN-HYPOTHESIS-001",
+      "branch": "specimen/007-hypothesis-fusion",
+      "sha": "0503951abd9c5dfe0fcf83b42f37d2077d6ef80a"
     }
   ]
 }

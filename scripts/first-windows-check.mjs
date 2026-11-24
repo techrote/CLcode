@@ -40,6 +40,7 @@ for (const [name, script] of [
   ['Specimen static map self-test', 'tools/specimen/Test-SpecimenMap.mjs'],
   ['Specimen ASAR internal map self-test', 'tools/specimen/Test-AsarMap.mjs'],
   ['Specimen ASAR integrity self-test', 'tools/specimen/Test-AsarIntegrity.mjs'],
+  ['Specimen evidence-fusion self-test', 'tools/specimen/Test-EvidenceFusion.mjs'],
   ['Specimen runtime-correlation self-test', 'tools/specimen/Test-RuntimeAnalysis.mjs'],
   ['Specimen guarded patch self-test', 'tools/specimen/Test-SpecimenPatch.mjs'],
   ['Specimen launch redaction/filter self-test', 'tools/specimen/Test-LaunchRedaction.mjs'],
