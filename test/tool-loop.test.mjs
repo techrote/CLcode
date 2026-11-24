@@ -55,7 +55,8 @@ test('commit includes only CLcode-edited paths and rejects a touched file change
     assert.match(execFileSync('git',['status','--porcelain'],{cwd:project,encoding:'utf8'}),/\?\? unrelated\.txt/);
     assert(!execFileSync('git',['show','--name-only','--pretty=','HEAD'],{cwd:project,encoding:'utf8'}).includes('unrelated.txt'));
 
-    const tools2 = await (await import('../src/runtime/tools.mjs')).ScopedTools.create(project,{requireClean:false});
+    rmSync(join(project,'unrelated.txt'));
+    const tools2 = await (await import('../src/runtime/tools.mjs')).ScopedTools.create(project);
     tools2.editFile({ path:'src/slug.mjs', old_text:"replace(/^-|-$/g, '');", new_text:"replace(/^-+|-+$/g, '');" });
     writeFileSync(join(project,'src','slug.mjs'), readFileSync(join(project,'src','slug.mjs'),'utf8') + '\n// external change\n');
     await assert.rejects(tools2.gitLocal({ action:'commit', message:'should refuse' }), /changed after CLcode's last edit/);
@@ -145,12 +146,13 @@ test('file tools deny Git metadata and hardlink aliases; exact replacement is li
   const {root,project}=fixture();
   try {
     const {ScopedTools}=await import('../src/runtime/tools.mjs');
+    const literal=join(project,'literal.txt'); writeFileSync(literal,'before');
+    execFileSync('git',['add','literal.txt'],{cwd:project}); execFileSync('git',['commit','-m','fixture: literal replacement'],{cwd:project,stdio:'pipe'});
     const tools=await ScopedTools.create(project);
     assert.throws(()=>tools.readFile({path:'.git/config'}),/Git metadata/);
     const outside=join(root,'outside.txt'); writeFileSync(outside,'outside');
     linkSync(outside,join(project,'alias.txt'));
     assert.throws(()=>tools.readFile({path:'alias.txt'}),/non-hardlinked/);
-    const literal=join(project,'literal.txt'); writeFileSync(literal,'before');
     tools.editFile({path:'literal.txt',old_text:'before',new_text:'$&'});
     assert.equal(readFileSync(literal,'utf8'),'$&');
   } finally {rmSync(root,{recursive:true,force:true});}
