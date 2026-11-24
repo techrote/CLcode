@@ -12,7 +12,8 @@ export class RuntimeService {
   }
 
   async start(params = {}) {
-    const runId = params.runId ?? newRunId();
+    const runId = String(params.runId ?? newRunId()).toUpperCase();
+    if (!/^R[0-9A-Z]{8,24}$/.test(runId)) throw new Error('Invalid run id.');
     if (this.tasks.has(runId) || this.controller.status(runId)) throw new Error(`Run ${runId} already exists.`);
     const task = this.controller.spawn({ ...params, runId });
     this.tasks.set(runId, task);
@@ -23,7 +24,7 @@ export class RuntimeService {
     // and provider-module initialization on Windows. Wait until either a durable
     // summary exists or the task itself resolves/rejects.
     while (true) {
-      const summary = this.controller.status(runId);
+      const summary = this.status(runId);
       if (summary) return summary;
       const outcome = await Promise.race([
         task.then(value => ({ done: true, value }), error => ({ done: true, error })),
@@ -36,21 +37,37 @@ export class RuntimeService {
     }
   }
 
+  #observed(summary) {
+    if (!summary) return summary;
+    const ownership = summary.status === 'running'
+      ? (this.tasks.has(String(summary.runId).toUpperCase()) ? 'local' : 'unverified')
+      : 'terminal';
+    return { ...summary, ownership };
+  }
+
+  status(runId) { return this.#observed(this.controller.status(runId)); }
+  list() { return this.controller.list().map(summary => this.#observed(summary)); }
+
+  #requireOwned(runId) {
+    const status = this.status(runId);
+    if (status?.status === 'running' && status.ownership !== 'local') throw new Error('Run ownership is unverified; inspect the original controller/provider before sending controls.');
+  }
+
   async wait(runId) {
-    const task = this.tasks.get(runId);
+    const task = this.tasks.get(String(runId).toUpperCase());
     if (task) return task;
-    return this.controller.status(runId);
+    return this.status(runId);
   }
 
   async invoke(method, params = {}) {
     switch (method) {
       case 'workers': return this.provider.listWorkers();
       case 'spawn': return this.start(params);
-      case 'status': return this.controller.status(params.runId);
+      case 'status': return this.status(params.runId);
       case 'events': return this.controller.events(params.runId, Number(params.afterSequence ?? 0));
-      case 'steer': return this.controller.steer(params.runId, params.text, { hard: Boolean(params.hard) });
-      case 'cancel': return this.controller.cancel(params.runId);
-      case 'list': return this.controller.list();
+      case 'steer': this.#requireOwned(params.runId); return this.controller.steer(params.runId, params.text, { hard: Boolean(params.hard) });
+      case 'cancel': this.#requireOwned(params.runId); return this.controller.cancel(params.runId);
+      case 'list': return this.list();
       default: throw new Error(`Unknown runtime method ${String(method).slice(0, 80)}.`);
     }
   }
