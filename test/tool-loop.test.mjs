@@ -65,7 +65,7 @@ test('commit includes only CLcode-edited paths and rejects a touched file change
 test('Windows termination plan kills the complete child process tree', async () => {
   const { terminationPlan } = await import('../src/runtime/tools.mjs');
   assert.deepEqual(terminationPlan('win32', 4321), { file:'taskkill', args:['/PID','4321','/T','/F'] });
-  assert.deepEqual(terminationPlan('linux', 4321), { signal:'SIGTERM' });
+  assert.deepEqual(terminationPlan('linux', 4321), { signal:'SIGKILL' });
 });
 
 test('tool subprocess environment excludes provider credentials and Node injection variables', async () => {

@@ -1,5 +1,5 @@
-import { execFile, execFileSync } from 'node:child_process';
-import { lstatSync, readFileSync, realpathSync, statSync, writeFileSync, renameSync, mkdtempSync, rmSync, openSync, closeSync, accessSync, constants } from 'node:fs';
+import { execFile, execFileSync, spawn } from 'node:child_process';
+import { lstatSync, readFileSync, realpathSync, statSync, writeFileSync, renameSync, mkdtempSync, rmSync, openSync, closeSync, accessSync, constants, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { dirname, isAbsolute, join, relative, resolve, sep, delimiter } from 'node:path';
@@ -64,7 +64,7 @@ export function resolveExecutable(name, env = process.env, { rejectRoot = null }
 }
 
 export function assertNoExternalGitFilters(gitExecutable, cwd, env = childEnv()) {
-  const options = { cwd, windowsHide: true, env, maxBuffer: 16_000_000 };
+  const options = { cwd, windowsHide: true, env, maxBuffer: 16_000_000, timeout: 10_000 };
   const tracked = execFileSync(gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'ls-files', '-z'], options);
   if (!tracked?.length) return;
   const output = execFileSync(
@@ -93,19 +93,31 @@ export function terminationPlan(platform, pid) {
   if (!Number.isInteger(Number(pid)) || Number(pid) <= 0) return null;
   return platform === 'win32'
     ? { file: 'taskkill', args: ['/PID', String(pid), '/T', '/F'] }
-    : { signal: 'SIGTERM' };
+    : { signal: 'SIGKILL' };
 }
 
-function terminateProcessTree(child) {
-  if (!child?.pid || child.exitCode !== null) return;
-  const plan = terminationPlan(process.platform, child.pid);
-  if (!plan) return;
+// A POSIX child is launched in a dedicated process group. Windows uses the
+// native tree termination command and waits for its exit, not just invocation.
+async function terminateProcessTree(child) {
+  const plan = terminationPlan(process.platform, child?.pid);
+  if (!plan) return { confirmed: false, evidence: 'missing_pid' };
   if (plan.file) {
     const executable = join(process.env.SystemRoot ?? process.env.WINDIR ?? 'C:\\Windows', 'System32', 'taskkill.exe');
-    const killer = execFile(executable, plan.args, { windowsHide: true, env: childEnv() }, () => {});
-    killer.once('error', () => { try { child.kill(); } catch {} });
-  } else {
+    try {
+      await execFileAsync(executable, plan.args, { windowsHide: true, env: childEnv(), timeout: 5000 });
+      return { confirmed: true, evidence: 'taskkill_tree_succeeded' };
+    } catch {
+      try { child.kill(); } catch {}
+      return { confirmed: false, evidence: 'taskkill_tree_failed' };
+    }
+  }
+  try {
+    process.kill(-child.pid, plan.signal);
+    return { confirmed: true, evidence: 'posix_group_signal' };
+  } catch (error) {
+    if (error?.code === 'ESRCH') return { confirmed: true, evidence: 'posix_group_absent' };
     try { child.kill(plan.signal); } catch {}
+    return { confirmed: false, evidence: 'posix_group_signal_failed' };
   }
 }
 
@@ -131,14 +143,39 @@ export class ScopedTools {
     const gitRoot = realpathSync(stdout.trim());
     const sameRoot = process.platform === 'win32' ? gitRoot.toLowerCase() === requested.toLowerCase() : gitRoot === requested;
     if (!sameRoot) throw new Error(`Project root must be the Git top-level directory: ${gitRoot}`);
-    if (options.requireClean !== false) {
-      const flags = await execFileAsync(gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'ls-files', '-v', '-z'], { cwd: gitRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
-      if (flags.stdout.split('\0').some(entry => /^[a-zS] /.test(entry))) throw new Error('Project index flags hide worktree changes; clear assume-unchanged or skip-worktree before admission.');
-      assertNoExternalGitFilters(gitExecutable, gitRoot, env);
-      const status = await execFileAsync(gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--untracked-files=all'], { cwd: gitRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
-      if (String(status.stdout ?? '').trim()) throw new Error('Project working tree must be clean before an agent run; commit, stash or discard existing changes first.');
+    const tools = new ScopedTools(gitRoot, { ...options, gitExecutable });
+    if (options.requireClean !== false) await tools.verifyClean();
+    return tools;
+  }
+
+  async verifyClean() {
+    const cwd = this.projectRoot, env = childEnv();
+    const flags = await execFileAsync(this.gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'ls-files', '-v', '-z'], { cwd, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
+    if (flags.stdout.split('\0').some(entry => /^[a-zS] /.test(entry))) throw new Error('Project index flags hide worktree changes; clear assume-unchanged or skip-worktree before admission.');
+    assertNoExternalGitFilters(this.gitExecutable, cwd, env);
+    const status = await execFileAsync(this.gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--untracked-files=all'], { cwd, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
+    if (String(status.stdout ?? '').trim()) throw new Error('Project working tree must be clean before an agent run; commit, stash or discard existing changes first.');
+  }
+
+  async acquireRunLease(runId, stateDir) {
+    // The lease is in the actual per-worktree Git directory, not the caller's
+    // chosen state directory. Separate CLcode processes cannot both own it.
+    const { stdout } = await execFileAsync(this.gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'rev-parse', '--absolute-git-dir'], { cwd: this.projectRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env: childEnv() });
+    const file = join(realpathSync(stdout.trim()), 'clcode-runtime.lease');
+    const owner = JSON.stringify({ runId, stateDir, pid: process.pid, token: randomBytes(16).toString('hex'), acquiredAt: new Date().toISOString() });
+    let fd;
+    try { fd = openSync(file, 'wx', 0o600); }
+    catch (error) {
+      if (error?.code === 'EEXIST') throw new Error('Project worktree is locked by an active or unreconciled CLcode run lease.');
+      throw error;
     }
-    return new ScopedTools(gitRoot, { ...options, gitExecutable });
+    try { writeFileSync(fd, owner); } finally { closeSync(fd); }
+    // Crash/unknown outcome deliberately leaves the lease in place. No PID-only
+    // stale lock reclamation and no automatic replay are permitted.
+    return { release() {
+      if (readFileSync(file, 'utf8') !== owner) throw new Error('Project run lease ownership changed; refusing release.');
+      unlinkSync(file);
+    } };
   }
 
   schemas() {
@@ -268,35 +305,89 @@ export class ScopedTools {
   }
 
   async exec(file, args, { timeout, signal, label }) {
-    if (signal?.aborted) return { ok: false, command: label, exitCode: null, stdout: '', stderr: '', error: 'Operation aborted before process start.', aborted: true, timedOut: false };
+    if (signal?.aborted) return { ok: false, command: label, exitCode: null, stdout: '', stderr: '', error: 'Operation aborted before process start.', aborted: true, timedOut: false, terminationConfirmed: true, terminationEvidence: 'not_started' };
     return new Promise(resolveResult => {
-      let aborted = false;
-      let timedOut = false;
-      let settled = false;
-      const child = execFile(file, args, {
-        cwd: this.projectRoot, windowsHide: true, maxBuffer: MAX_OUTPUT,
-        encoding: 'utf8', env: childEnv(),
-      }, (error, stdout, stderr) => {
+      let settled = false, stopReason = null, stopping = null, failure = null, timer, grace;
+      let stdoutSize = 0, stderrSize = 0;
+      const out = [], err = [];
+      let child;
+      const finish = (code, evidence = null) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        clearTimeout(timer); clearTimeout(grace);
         signal?.removeEventListener?.('abort', onAbort);
-        if (!error) {
-          resolveResult({ ok: true, command: label, exitCode: 0, stdout: cleanText(stdout), stderr: cleanText(stderr) });
-          return;
-        }
-        const exitCode = Number.isInteger(error?.code) ? error.code : null;
+        const stdout = cleanText(Buffer.concat(out).toString('utf8'));
+        const stderr = cleanText(Buffer.concat(err).toString('utf8'));
+        const aborted = stopReason === 'abort', timedOut = stopReason === 'timeout';
+        const ok = !stopReason && !failure && code === 0;
         resolveResult({
-          ok: false, command: label, exitCode,
-          stdout: cleanText(stdout ?? error?.stdout), stderr: cleanText(stderr ?? error?.stderr),
-          error: String(error?.message ?? error).slice(0, 600),
+          ok, command: label, exitCode: Number.isInteger(code) ? code : null, stdout, stderr,
+          ...(!ok && { error: String(failure?.message ?? stopReason ?? ('Process exited with ' + code)).slice(0, 600) }),
           aborted, timedOut,
+          ...(evidence && { terminationConfirmed: evidence.confirmed, terminationEvidence: evidence.evidence }),
         });
+      };
+      const stop = reason => {
+        if (settled || stopReason) return;
+        stopReason = reason;
+        stopping = terminateProcessTree(child);
+        // A failed native tree termination must not turn into a confirmed
+        // cancellation or hold the control loop forever.
+        grace = setTimeout(() => {
+          try { child.kill('SIGKILL'); } catch {}
+          finish(null, { confirmed: false, evidence: 'tree_close_unconfirmed' });
+        }, 8000);
+        grace.unref?.();
+      };
+      const onAbort = () => stop('abort');
+      try {
+        child = spawn(file, args, {
+          cwd: this.projectRoot, windowsHide: true, shell: false,
+          detached: process.platform !== 'win32',
+          stdio: ['ignore', 'pipe', 'pipe'], env: childEnv(),
+        });
+      } catch (error) { failure = error; finish(null, { confirmed: true, evidence: 'spawn_rejected' }); return; }
+      child.once('error', error => { failure = error; });
+      const collect = (chunks, chunk, isError) => {
+        if (settled) return;
+        const size = isError ? stderrSize : stdoutSize;
+        const available = Math.max(0, MAX_OUTPUT - size);
+        if (available) chunks.push(chunk.subarray(0, available));
+        if (isError) stderrSize += Math.min(chunk.length, available); else stdoutSize += Math.min(chunk.length, available);
+        if (chunk.length > available) stop('output_limit');
+      };
+      child.stdout.on('data', chunk => collect(out, chunk, false));
+      child.stderr.on('data', chunk => collect(err, chunk, true));
+      child.once('close', async code => {
+        if (settled) return;
+        if (stopping) {
+          const evidence = await stopping;
+          finish(code, evidence);
+        } else if (failure && !child.pid) {
+          finish(code, { confirmed: true, evidence: 'spawn_rejected' });
+        } else {
+          // A normally exiting POSIX parent may still have ordinary group
+          // descendants. Do not carry those into the next model step.
+          if (process.platform !== 'win32' && child.pid) {
+            try {
+              process.kill(-child.pid, 0);
+              stopReason = 'descendants_after_parent_exit';
+              finish(code, await terminateProcessTree(child));
+              return;
+            } catch (error) {
+              if (error?.code !== 'ESRCH') {
+                stopReason = 'group_state_unknown';
+                finish(code, { confirmed: false, evidence: 'group_probe_failed' }); return;
+              }
+            }
+          }
+          finish(code);
+        }
       });
-      const onAbort = () => { aborted = true; terminateProcessTree(child); };
       signal?.addEventListener?.('abort', onAbort, { once: true });
-      const timer = setTimeout(() => { timedOut = true; terminateProcessTree(child); }, timeout);
+      timer = setTimeout(() => stop('timeout'), timeout);
       timer.unref?.();
+      if (signal?.aborted) onAbort();
     });
   }
 }

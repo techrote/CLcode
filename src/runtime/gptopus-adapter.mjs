@@ -19,8 +19,7 @@ export class GPTopusAdapter {
     this.loaded = null;
   }
 
-  async load() {
-    if (this.loaded) return this.loaded;
+  verifyDonor() {
     if (this.expectedSha) {
       // Local Git configuration is outside the pinned donor commit and may run
       // helpers such as core.fsmonitor. Integrity probes therefore use the same
@@ -41,6 +40,11 @@ export class GPTopusAdapter {
       catch { throw new Error('GPTopus checkout status is unreadable; cannot verify donor source integrity.'); }
       if (dirty) throw new Error('GPTopus donor working tree is not clean; refusing to load source that differs from the pinned commit.');
     }
+  }
+
+  async load() {
+    if (this.loaded) return this.loaded;
+    this.verifyDonor();
     const bridge = join(this.root, 'plugins', 'openai-workers', 'bridge', 'server.mjs');
     const workers = join(this.root, 'plugins', 'openai-workers', 'bridge', 'workers.mjs');
     if (!existsSync(bridge) || !existsSync(workers)) {
@@ -90,9 +94,13 @@ export class GPTopusAdapter {
   }
 
   async create({ worker, input, instructions, tools, effort, previousResponseId, agentId, requestId }) {
-    const { dispatch } = await this.load();
-    const settings = await this.settings(worker);
-    if (settings.tools === false && tools.length) throw new Error(`${worker} does not support tools.`);
+    let dispatch, settings;
+    try {
+      if (this.loaded) this.verifyDonor();
+      ({ dispatch } = await this.load());
+      settings = await this.settings(worker);
+      if (settings.tools === false && tools.length) throw new Error(`${worker} does not support tools.`);
+    } catch (error) { error.usageDisposition = 'not_started'; throw error; }
     return this.unpack(await dispatch('create', {
       worker_type: settings.name,
       model: settings.model,
