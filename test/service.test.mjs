@@ -47,3 +47,17 @@ test('JSONL service exposes Desktop request/response boundary', async () => {
   input.write(JSON.stringify({id:1,method:'status',params:{runId:'RJSONL001'}})+'\n'); input.write('{not json}\n'); input.write(JSON.stringify({id:2,method:'list',params:{}})+'\n'); input.write(JSON.stringify({id:3,method:'missing',params:{}})+'\n'); input.end();
   await serving; assert.deepEqual(replies[0],{id:1,result:{runId:'RJSONL001',status:'running'}}); assert.equal(replies[1].error.code,'invalid_json'); assert.equal(replies[2].result[0].runId,'RJSONL001'); assert.equal(replies[3].error.code,'runtime_error');
 });
+
+test('restarted service exposes persisted running state as unverified rather than live', async () => {
+  const {root}=fixture();
+  try {
+    const provider=new PollingProvider();
+    const controller=new RunController({stateDir:join(root,'state'),provider});
+    controller.store.init({runId:'RRESTART01',status:'running',phase:'model',currentResponseId:'resp_unknown'});
+    const service=new RuntimeService({controller,provider});
+    const status=await service.invoke('status',{runId:'RRESTART01'});
+    assert.equal(status.status,'running'); assert.equal(status.ownership,'unverified');
+    assert.equal((await service.invoke('list'))[0].ownership,'unverified');
+    await assert.rejects(service.invoke('cancel',{runId:'RRESTART01'}),/ownership is unverified/);
+  } finally {rmSync(root,{recursive:true,force:true});}
+});

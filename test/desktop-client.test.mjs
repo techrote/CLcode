@@ -23,7 +23,7 @@ test('runtime process client correlates concurrent out-of-order replies', async 
 test('spawn admission is not abandoned by the generic request timeout', async () => {
   const c = client(20);
   try {
-    const admitted = await c.request('spawn', { delayMs: 80 });
+    const admitted = await c.request('spawn', { delayMs: 80, runId: 'RCLIENT001' });
     assert.equal(admitted.runId, 'RCLIENT001');
     assert.equal(admitted.status, 'running');
     await assert.rejects(
@@ -127,4 +127,25 @@ test('runtime errors are structured and pending requests reject when process exi
     c.child.kill();
     await assert.rejects(pending, error => error instanceof RuntimeProtocolError && error.code === 'process_exit');
   } finally { await c.close(); }
+});
+
+test('lost spawn acknowledgement exposes known reconciliation ID', async () => {
+  const c=client();
+  try {
+    const pending=c.request('spawn',{runId:'RLOST0001',delayMs:1000});
+    c.child.kill();
+    await assert.rejects(pending,error=>error.code==='admission_unknown'&&error.detail.runId==='RLOST0001');
+  } finally {await c.close();}
+});
+test('follower refuses to claim continuity for an unverified persisted run', async () => {
+  const fakeClient={async request(method){if(method==='events')return[];return {runId:'RRESTART01',status:'running',ownership:'unverified'};}};
+  await assert.rejects(new RunFollower(fakeClient,{pollMs:1}).follow('RRESTART01'),error=>error.code==='run_ownership_unverified');
+});
+test('a busy follower rejects a second spawn before it reaches the service', async () => {
+  let release; const gate=new Promise(resolve=>{release=resolve;}); let spawns=0;
+  const fakeClient={async request(method,params){if(method==='spawn'){spawns++;return {runId:'RSECOND001',status:'running'};}if(method==='events'){await gate;return params.afterSequence===0?[{runId:'RFIRST0001',sequence:1,type:'run.completed'}]:[];}return {runId:'RFIRST0001',status:'completed',lastSequence:1};}};
+  const follower=new RunFollower(fakeClient,{pollMs:1});
+  const first=follower.follow('RFIRST0001');
+  await assert.rejects(follower.spawnAndFollow({}),error=>error.code==='follower_busy');
+  assert.equal(spawns,0); release(); assert.equal((await first).status,'completed');
 });

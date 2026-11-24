@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';
+import { newRunId } from '../runtime/journal.mjs';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'incomplete', 'step_limit', 'time_limit', 'interrupted']);
@@ -39,6 +40,7 @@ export class RuntimeProcessClient {
     this.child = child;
     const lines = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
     lines.on('line', line => this.#handleLine(line));
+    child.stdin.on('error', error => this.#closeWith(new RuntimeProtocolError(`Runtime request stream failed: ${error.message}`, 'write_error')));
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', chunk => this.onStderr(String(chunk)));
     child.once('error', error => this.#closeWith(new RuntimeProtocolError(`Runtime process failed to start: ${error.message}`, 'process_error')));
@@ -59,6 +61,9 @@ export class RuntimeProcessClient {
     if (method === 'spawn' && timeoutMs !== undefined && timeoutMs !== null) {
       throw new Error('spawn requests cannot use a client-side timeout; admission must resolve or fail authoritatively.');
     }
+    const runId = method === 'spawn' ? String(params.runId ?? newRunId()).toUpperCase() : null;
+    if (runId && !/^R[0-9A-Z]{8,24}$/.test(runId)) throw new Error('Invalid run id.');
+    if (runId) params = { ...params, runId };
     const effectiveTimeoutMs = method === 'spawn' ? null : (timeoutMs === undefined ? this.requestTimeoutMs : timeoutMs);
     if (effectiveTimeoutMs !== null && (!Number.isFinite(Number(effectiveTimeoutMs)) || Number(effectiveTimeoutMs) <= 0)) {
       throw new Error('timeoutMs must be a positive number or null.');
@@ -69,13 +74,13 @@ export class RuntimeProcessClient {
         reject(new RuntimeProtocolError(`Runtime request ${method} timed out after ${effectiveTimeoutMs}ms.`, 'timeout', { id, method }));
       }, Number(effectiveTimeoutMs));
       timer?.unref?.();
-      this.pending.set(id, { resolve, reject, timer, method });
+      this.pending.set(id, { resolve, reject, timer, method, runId });
       try {
         this.child.stdin.write(`${JSON.stringify({ id, method, params })}\n`, 'utf8');
       } catch (error) {
         if (timer) clearTimeout(timer);
         this.pending.delete(id);
-        reject(new RuntimeProtocolError(`Could not write runtime request: ${error.message}`, 'write_error'));
+        reject(runId ? new RuntimeProtocolError('Spawn transmission could not be confirmed; reconcile by run ID.', 'admission_unknown', { runId, cause: 'write_error' }) : new RuntimeProtocolError(`Could not write runtime request: ${error.message}`, 'write_error'));
       }
     });
   }
@@ -107,7 +112,9 @@ export class RuntimeProcessClient {
     if (pending.timer) clearTimeout(pending.timer);
     this.pending.delete(message.id);
     if (message.error) {
-      pending.reject(new RuntimeProtocolError(String(message.error.message ?? 'Runtime request failed.'), String(message.error.code ?? 'runtime_error'), message.error));
+      pending.reject(new RuntimeProtocolError(String(message.error.message ?? 'Runtime request failed.'), String(message.error.code ?? 'runtime_error'), { ...message.error, ...(pending.runId && { runId: pending.runId }) }));
+    } else if (pending.runId && message.result?.runId !== pending.runId) {
+      pending.reject(new RuntimeProtocolError('Spawn acknowledgement has a different or absent run ID; reconcile by requested ID.', 'admission_unknown', { runId: pending.runId, observedRunId: message.result?.runId ?? null }));
     } else {
       pending.resolve(message.result);
     }
@@ -116,9 +123,9 @@ export class RuntimeProcessClient {
   #closeWith(error) {
     if (this.closedError) return;
     this.closedError = error;
-    for (const { reject, timer } of this.pending.values()) {
+    for (const { reject, timer, runId } of this.pending.values()) {
       if (timer) clearTimeout(timer);
-      reject(error);
+      reject(runId ? new RuntimeProtocolError('Spawn acknowledgement was lost; reconcile by run ID before retrying.', 'admission_unknown', { runId, cause: error.code }) : error);
     }
     this.pending.clear();
   }
@@ -134,6 +141,7 @@ export class RunFollower {
     this.cursor = 0;
     this.terminalEventStatus = null;
     this.terminalEventSequence = 0;
+    this.following = false;
   }
 
   #reset(runId) {
@@ -154,7 +162,7 @@ export class RunFollower {
           { runId, expected, received: event?.sequence ?? null }
         );
       }
-      if (event?.runId && event.runId !== runId) {
+      if (event?.runId !== runId) {
         throw new RuntimeProtocolError(`Runtime event for ${event.runId} was delivered while following ${runId}.`, 'event_run_mismatch', { runId, eventRunId: event.runId, sequence });
       }
       this.cursor = sequence;
@@ -170,14 +178,25 @@ export class RunFollower {
   }
 
   async spawnAndFollow(params, options = {}) {
-    const admitted = await this.client.request('spawn', params);
-    if (this.runId !== admitted.runId) this.#reset(admitted.runId);
-    this.runId = admitted.runId;
-    this.onStatus(admitted);
-    return this.follow(admitted.runId, options);
+    if (this.following) throw new RuntimeProtocolError('This follower already owns a follow operation.', 'follower_busy');
+    this.following = true;
+    try {
+      const admitted = await this.client.request('spawn', params);
+      if (this.runId !== admitted.runId) this.#reset(admitted.runId);
+      this.runId = admitted.runId;
+      this.onStatus(admitted);
+      return await this.#follow(admitted.runId, options);
+    } finally { this.following = false; }
   }
 
-  async follow(runId, { signal } = {}) {
+  async follow(runId, options = {}) {
+    if (this.following) throw new RuntimeProtocolError('This follower already owns a follow operation.', 'follower_busy');
+    this.following = true;
+    try { return await this.#follow(String(runId).toUpperCase(), options); }
+    finally { this.following = false; }
+  }
+
+  async #follow(runId, { signal } = {}) {
     if (this.runId !== runId) this.#reset(runId);
     this.runId = runId;
     while (true) {
@@ -187,6 +206,7 @@ export class RunFollower {
       let status = await this.client.request('status', { runId });
       if (!status) throw new RuntimeProtocolError(`Run ${runId} no longer exists.`, 'run_missing');
       this.onStatus(status);
+      if (status.status === 'running' && status.ownership === 'unverified') throw new RuntimeProtocolError('Persisted run state does not establish controller liveness; reconcile before retrying.', 'run_ownership_unverified', { runId });
       if (TERMINAL.has(status.status)) {
         // A terminal summary may become visible a few milliseconds before its
         // final event append. Drain and re-read status a bounded number of times,
