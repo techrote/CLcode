@@ -56,7 +56,10 @@ export class RuntimeProcessClient {
     if (!this.child) this.start();
     if (!this.running) throw this.closedError ?? new RuntimeProtocolError('Runtime process is not running.', 'process_exit');
     const id = this.nextId++;
-    const effectiveTimeoutMs = timeoutMs === undefined ? (method === 'spawn' ? null : this.requestTimeoutMs) : timeoutMs;
+    if (method === 'spawn' && timeoutMs !== undefined && timeoutMs !== null) {
+      throw new Error('spawn requests cannot use a client-side timeout; admission must resolve or fail authoritatively.');
+    }
+    const effectiveTimeoutMs = method === 'spawn' ? null : (timeoutMs === undefined ? this.requestTimeoutMs : timeoutMs);
     if (effectiveTimeoutMs !== null && (!Number.isFinite(Number(effectiveTimeoutMs)) || Number(effectiveTimeoutMs) <= 0)) {
       throw new Error('timeoutMs must be a positive number or null.');
     }
