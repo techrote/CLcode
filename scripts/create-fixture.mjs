@@ -1,12 +1,13 @@
 #!/usr/bin/env node
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 const dest = resolve(process.argv[2] ?? 'clcode-fixture-slugger');
 if (dest === resolve('.') || dest.length < 5) throw new Error('Refusing unsafe fixture destination.');
-rmSync(dest, { recursive: true, force: true });
-mkdirSync(join(dest, 'src'), { recursive: true });
+// Reserve the destination atomically; an existing directory, file or link is never removed.
+mkdirSync(dest);
+mkdirSync(join(dest, 'src'));
 mkdirSync(join(dest, 'test'), { recursive: true });
 writeFileSync(join(dest, 'package.json'), '{"name":"clcode-slugger-fixture","private":true,"type":"module","scripts":{"test":"node --test"}}\n');
 writeFileSync(join(dest, 'src', 'slug.mjs'), `export function slugify(value) {\n  return String(value).trim().toLowerCase();\n}\n`);
