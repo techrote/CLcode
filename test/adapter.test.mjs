@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { GPTopusAdapter } from '../src/runtime/gptopus-adapter.mjs';
 
-test('GPTopus adapter verifies donor pin and paged bridge contract', async () => {
+test('GPTopus adapter verifies donor pin, clean source and paged bridge contract', async () => {
   const root=mkdtempSync(join(tmpdir(),'clcode-donor-'));
   try {
     const dir=join(root,'plugins','openai-workers','bridge'); mkdirSync(dir,{recursive:true});
@@ -18,5 +18,7 @@ test('GPTopus adapter verifies donor pin and paged bridge contract', async () =>
     assert.equal((await adapter.listWorkers())[0].name,'fake');
     assert.equal((await adapter.create({worker:'fake',input:'hi',instructions:'x',tools:[],agentId:'RFAKE0001'})).text,'ok');
     await assert.rejects(new GPTopusAdapter({root,expectedSha:'0000000000000000000000000000000000000000'}).load(),/SHA mismatch/);
+    appendFileSync(join(dir,'workers.mjs'),'// local mutation after pin\n');
+    await assert.rejects(new GPTopusAdapter({root,expectedSha:sha}).load(),/working tree is not clean/);
   } finally { rmSync(root,{recursive:true,force:true}); }
 });

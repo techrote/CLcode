@@ -25,6 +25,10 @@ export class GPTopusAdapter {
       try { actual = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: this.root, encoding: 'utf8', windowsHide: true }).trim(); }
       catch { throw new Error('GPTopus checkout is not a readable Git worktree; cannot verify donor pin.'); }
       if (actual !== this.expectedSha) throw new Error(`GPTopus donor SHA mismatch: expected ${this.expectedSha}, got ${actual}.`);
+      let dirty;
+      try { dirty = execFileSync('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: this.root, encoding: 'utf8', windowsHide: true }).trim(); }
+      catch { throw new Error('GPTopus checkout status is unreadable; cannot verify donor source integrity.'); }
+      if (dirty) throw new Error('GPTopus donor working tree is not clean; refusing to load source that differs from the pinned commit.');
     }
     const bridge = join(this.root, 'plugins', 'openai-workers', 'bridge', 'server.mjs');
     const workers = join(this.root, 'plugins', 'openai-workers', 'bridge', 'workers.mjs');
