@@ -19,6 +19,11 @@ function stepRecord(view, step) {
       text: '',
       usage: null,
       estimatedUsd: null,
+      priceStatus: null,
+      model: null,
+      provider: null,
+      serviceTier: null,
+      substitutedFrom: null,
       tools: [],
       interruptions: 0,
     };
@@ -69,6 +74,7 @@ function addUsage(view, payload) {
   }
   const usd = cleanNumber(payload?.estimatedUsd);
   if (usd !== null && usd >= 0) view.usage.estimatedUsd += usd;
+  else if (payload?.estimatedUsd === null && payload?.priceStatus !== 'free') view.usage.costUnknown = true;
   else if (payload?.estimatedUsd !== undefined && payload?.estimatedUsd !== null) view.usage.costUnknown = true;
 }
 
@@ -81,7 +87,11 @@ export function createRunView(seed = {}) {
     projectRoot: seed.projectRoot ?? null,
     worker: seed.worker ?? null,
     model: seed.model ?? null,
+    configuredModel: seed.configuredModel ?? seed.model ?? null,
     provider: seed.provider ?? null,
+    serviceTier: seed.serviceTier ?? null,
+    substitutedFrom: seed.substitutedFrom ?? null,
+    providerExecutionUnknown: Boolean(seed.providerExecutionUnknown),
     effort: seed.effort ?? null,
     task: seed.task ?? null,
     currentResponseId: seed.currentResponseId ?? null,
@@ -106,9 +116,12 @@ export function createRunView(seed = {}) {
 export function applyRuntimeStatus(view, status) {
   if (!status || typeof status !== 'object') return view;
   if (status.runId) view.runId = status.runId;
-  for (const key of ['status', 'phase', 'projectRoot', 'worker', 'model', 'provider', 'effort', 'task', 'currentResponseId', 'answer', 'reason', 'createdAt', 'updatedAt', 'finishedAt']) {
+  for (const key of ['status', 'phase', 'projectRoot', 'worker', 'model', 'configuredModel', 'provider', 'serviceTier', 'substitutedFrom', 'effort', 'task', 'currentResponseId', 'answer', 'reason', 'createdAt', 'updatedAt', 'finishedAt']) {
     if (status[key] !== undefined) view[key] = clone(status[key]);
   }
+  if (status.providerExecutionUnknown === true) view.providerExecutionUnknown = true;
+  if (status.usageUnknown === true) view.usage.unknown = true;
+  if (status.costUnknown === true) view.usage.costUnknown = true;
   if (status.step !== undefined) view.currentStep = Number(status.step) || 0;
   if (status.lastSequence !== undefined) view.highestSeenSequence = Math.max(view.highestSeenSequence, Number(status.lastSequence) || 0);
   view.terminal = TERMINAL.has(view.status);
@@ -138,6 +151,8 @@ export function applyRuntimeEvent(view, event) {
       view.projectRoot = p.projectRoot ?? view.projectRoot;
       view.worker = p.worker ?? view.worker;
       view.model = p.model ?? view.model;
+      view.configuredModel = p.configuredModel ?? p.model ?? view.configuredModel;
+      view.provider = p.provider ?? view.provider;
       addTimeline(view, event, 'run', 'Run started', p);
       break;
     case 'run.cancel_requested':
@@ -173,7 +188,15 @@ export function applyRuntimeEvent(view, event) {
       const step = stepRecord(view, p.step);
       step.status = p.status ?? 'accepted';
       step.responseId = p.responseId ?? step.responseId;
+      step.model = p.model ?? step.model;
+      step.provider = p.provider ?? step.provider;
+      step.serviceTier = p.serviceTier ?? step.serviceTier;
+      step.substitutedFrom = p.substitutedFrom ?? step.substitutedFrom;
       view.currentResponseId = p.responseId ?? view.currentResponseId;
+      view.model = p.model ?? view.model;
+      view.provider = p.provider ?? view.provider;
+      view.serviceTier = p.serviceTier ?? view.serviceTier;
+      view.substitutedFrom = p.substitutedFrom ?? view.substitutedFrom;
       addTimeline(view, event, 'model', `Model step ${step.step} accepted`, p);
       break;
     }
@@ -187,6 +210,17 @@ export function applyRuntimeEvent(view, event) {
     case 'model.cancelled':
       addTimeline(view, event, 'model', 'Provider cancellation observed', p);
       break;
+    case 'model.poll_failed':
+      addTimeline(view, event, 'model', 'Provider poll failed; state remains unresolved', p);
+      break;
+    case 'model.request_failed':
+      if (p.usageDisposition === 'ambiguous') {
+        view.providerExecutionUnknown = true;
+        view.usage.unknown = true;
+        view.usage.costUnknown = true;
+      }
+      addTimeline(view, event, 'model', 'Provider request failed', p);
+      break;
     case 'model.completed': {
       const step = stepRecord(view, p.step);
       step.status = p.status ?? 'completed';
@@ -194,9 +228,22 @@ export function applyRuntimeEvent(view, event) {
       step.text = String(p.text ?? '');
       step.usage = clone(p.usage ?? null);
       step.estimatedUsd = p.estimatedUsd ?? null;
+      step.priceStatus = p.priceStatus ?? null;
+      step.model = p.model ?? step.model;
+      step.provider = p.provider ?? step.provider;
+      step.serviceTier = p.serviceTier ?? step.serviceTier;
+      step.substitutedFrom = p.substitutedFrom ?? step.substitutedFrom;
       view.currentResponseId = null;
+      view.model = p.model ?? view.model;
+      view.provider = p.provider ?? view.provider;
+      view.serviceTier = p.serviceTier ?? view.serviceTier;
+      view.substitutedFrom = p.substitutedFrom ?? view.substitutedFrom;
       addUsage(view, p);
-      addTimeline(view, event, 'model', `Model step ${step.step} completed`, { status: p.status, responseId: p.responseId, usage: p.usage, estimatedUsd: p.estimatedUsd });
+      addTimeline(view, event, 'model', `Model step ${step.step} completed`, {
+        status: p.status, responseId: p.responseId, usage: p.usage, estimatedUsd: p.estimatedUsd,
+        priceStatus: p.priceStatus, model: p.model, provider: p.provider, serviceTier: p.serviceTier,
+        substitutedFrom: p.substitutedFrom,
+      });
       break;
     }
     case 'tool.requested': {
