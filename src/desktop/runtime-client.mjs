@@ -132,38 +132,91 @@ export class RunFollower {
     this.onStatus = onStatus;
     this.runId = null;
     this.cursor = 0;
+    this.terminalEventStatus = null;
+    this.terminalEventSequence = 0;
+  }
+
+  #reset(runId) {
+    this.runId = runId;
+    this.cursor = 0;
+    this.terminalEventStatus = null;
+    this.terminalEventSequence = 0;
+  }
+
+  #consume(runId, events) {
+    for (const event of events ?? []) {
+      const sequence = Number(event?.sequence);
+      const expected = this.cursor + 1;
+      if (!Number.isInteger(sequence) || sequence !== expected) {
+        throw new RuntimeProtocolError(
+          `Runtime event history for ${runId} is not contiguous: expected sequence ${expected}, received ${String(event?.sequence)}.`,
+          'event_gap',
+          { runId, expected, received: event?.sequence ?? null }
+        );
+      }
+      if (event?.runId && event.runId !== runId) {
+        throw new RuntimeProtocolError(`Runtime event for ${event.runId} was delivered while following ${runId}.`, 'event_run_mismatch', { runId, eventRunId: event.runId, sequence });
+      }
+      this.cursor = sequence;
+      if (typeof event?.type === 'string' && event.type.startsWith('run.')) {
+        const state = event.type.slice(4);
+        if (TERMINAL.has(state)) {
+          this.terminalEventStatus = state;
+          this.terminalEventSequence = sequence;
+        }
+      }
+      this.onEvent(event);
+    }
   }
 
   async spawnAndFollow(params, options = {}) {
     const admitted = await this.client.request('spawn', params);
-    if (this.runId !== admitted.runId) this.cursor = 0;
+    if (this.runId !== admitted.runId) this.#reset(admitted.runId);
     this.runId = admitted.runId;
     this.onStatus(admitted);
     return this.follow(admitted.runId, options);
   }
 
   async follow(runId, { signal } = {}) {
-    if (this.runId !== runId) this.cursor = 0;
+    if (this.runId !== runId) this.#reset(runId);
     this.runId = runId;
     while (true) {
       if (signal?.aborted) throw new RuntimeProtocolError('Run following aborted by client.', 'aborted');
       const events = await this.client.request('events', { runId, afterSequence: this.cursor });
-      for (const event of events ?? []) {
-        this.cursor = Math.max(this.cursor, Number(event.sequence ?? 0));
-        this.onEvent(event);
-      }
-      const status = await this.client.request('status', { runId });
+      this.#consume(runId, events);
+      let status = await this.client.request('status', { runId });
       if (!status) throw new RuntimeProtocolError(`Run ${runId} no longer exists.`, 'run_missing');
       this.onStatus(status);
       if (TERMINAL.has(status.status)) {
-        // Terminal state can be persisted after our preceding event poll. Drain once
-        // more so the UI never misses the final run.completed/failed/cancelled event.
-        const finalEvents = await this.client.request('events', { runId, afterSequence: this.cursor });
-        for (const event of finalEvents ?? []) {
-          this.cursor = Math.max(this.cursor, Number(event.sequence ?? 0));
-          this.onEvent(event);
+        // A terminal summary may become visible a few milliseconds before its
+        // final event append. Drain and re-read status a bounded number of times,
+        // then fail closed rather than telling the UI that incomplete history is complete.
+        for (let attempt = 0; attempt < 4; attempt++) {
+          const finalEvents = await this.client.request('events', { runId, afterSequence: this.cursor });
+          this.#consume(runId, finalEvents);
+          status = await this.client.request('status', { runId });
+          if (!status) throw new RuntimeProtocolError(`Run ${runId} no longer exists.`, 'run_missing');
+          const lastSequence = Number(status.lastSequence);
+          const complete = Number.isInteger(lastSequence) && lastSequence === this.cursor &&
+            this.terminalEventStatus === status.status && this.terminalEventSequence === this.cursor;
+          if (complete) {
+            this.onStatus(status);
+            return status;
+          }
+          if (attempt < 3) await sleep(this.pollMs);
         }
-        return status;
+        throw new RuntimeProtocolError(
+          `Terminal run ${runId} does not have a complete matching terminal event history.`,
+          'terminal_history_incomplete',
+          {
+            runId,
+            status: status.status,
+            statusLastSequence: status.lastSequence ?? null,
+            cursor: this.cursor,
+            terminalEventStatus: this.terminalEventStatus,
+            terminalEventSequence: this.terminalEventSequence,
+          }
+        );
       }
       await sleep(this.pollMs);
     }
