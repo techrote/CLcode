@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 2,
+  "recordedAt": "2026-11-24",
+  "purpose": "FIRST-WINDOWS-001 definitive composition pins. Every listed SHA must be an ancestor of the evaluator checkout.",
+  "gptopusDonor": "849627463c3e2be660f9d24976320b072c107b34",
+  "supersededReviewSlices": [
+    {
+      "pr": 22,
+      "name": "RUNTIME-INTEGRATED-001",
+      "reason": "Its subprocess-integrity content is inherited through PR #20/#34; the separate consolidation topology is not the chosen definitive lineage."
+    }
+  ],
+  "definitive": {
+    "runtime": {
+      "pr": 34,
+      "sha": "aa9810ea4ad5a4a51dc16ca2a985996480b2ec24"
+    },
+    "specimen": {
+      "pr": 35,
+      "sha": "35d9a615e034ea6080e77c7d2e39a9a1538a1fbb"
+    },
+    "preflight": {
+      "pr": 25,
+      "sha": "c8b47ebf1d216cf65497cffa66ec3a78a6caaa83"
+    }
+  },
+  "components": [
+    {
+      "pr": 3,
+      "name": "SPECIMEN-LAB-001",
+      "branch": "specimen/001-windows-lab",
+      "sha": "2210b6494e33063c3373c06167f23d6d05d8f859"
+    },
+    {
+      "pr": 4,
+      "name": "HOSTLESS-RUN-001",
+      "branch": "runtime/001-hostless-agent",
+      "sha": "0a4eaf52cde00b85faf0698a006e0879adf6820e"
+    },
+    {
+      "pr": 5,
+      "name": "DESKTOP-CLIENT-001",
+      "branch": "desktop/001-runtime-client",
+      "sha": "b76c186017535ed324afa7614da9ade4a4815b8f"
+    },
+    {
+      "pr": 6,
+      "name": "SPECIMEN-MAP-001",
+      "branch": "specimen/002-control-path-map",
+      "sha": "b16909037b0fcfba1af4bddbc926218f62500059"
+    },
+    {
+      "pr": 7,
+      "name": "SPECIMEN-SURGERY-001",
+      "branch": "specimen/003-guarded-surgery",
+      "sha": "db27cd1c4eb7e949581f31d528bfb4a0efab8d79"
+    },
+    {
+      "pr": 8,
+      "name": "SPECIMEN-LAUNCH-001",
+      "branch": "specimen/004-launch-trace",
+      "sha": "cb3a2fc242cd6faf2be38d3587641dbd276d1037"
+    },
+    {
+      "pr": 9,
+      "name": "RUNTIME-HARDENING-001",
+      "branch": "runtime/002-windows-integrity",
+      "sha": "175b2a9e58dd1a9eb519fb96828581bb81eb1bf4"
+    },
+    {
+      "pr": 11,
+      "name": "RUNTIME-ADMISSION-001",
+      "branch": "runtime/003-admission-integrity",
+      "sha": "c7e00433625e8956723cfd72a480973fb3cb0998"
+    },
+    {
+      "pr": 12,
+      "name": "RUNTIME-HARDENING-002",
+      "branch": "runtime/003-subprocess-env-isolation",
+      "sha": "567e9d5ef5b564e17482bb5f6c833f24d3f17039"
+    },
+    {
+      "pr": 13,
+      "name": "SPECIMEN-ASAR-001",
+      "branch": "specimen/005-asar-map",
+      "sha": "ac7287a7b1c02dc707edc3144d7bcc857176343c"
+    },
+    {
+      "pr": 14,
+      "name": "RUNTIME-DONOR-INTEGRITY-001",
+      "branch": "runtime/004-donor-integrity",
+      "sha": "3903f8b99c72adf5d4addb926b329517aa4b28f3"
+    },
+    {
+      "pr": 15,
+      "name": "SPECIMEN-ASAR-HARDENING-001",
+      "branch": "specimen/006-asar-explicit-archive",
+      "sha": "df3383d923b7b41bcb83c91f7cccf5f0b1772317"
+    },
+    {
+      "pr": 16,
+      "name": "RUNTIME-ADMISSION-HARDENING-002",
+      "branch": "runtime/005-admission-timeout-integrity",
+      "sha": "12eca2de12744dc6a8d86068f0841f7cd95387ec"
+    },
+    {
+      "pr": 17,
+      "name": "DESKTOP-CLIENT-HARDENING-002",
+      "branch": "desktop/002-run-follower-reuse",
+      "sha": "67bde24075502a126026bbc8d89022bb2337b5ab"
+    },
+    {
+      "pr": 18,
+      "name": "SPECIMEN-ASAR-INTEGRITY-001",
+      "branch": "specimen/006-asar-integrity",
+      "sha": "73e36c48635567336407e5a8ad271d81567e457f"
+    },
+    {
+      "pr": 19,
+      "name": "SPECIMEN-HYPOTHESIS-001",
+      "branch": "specimen/007-hypothesis-fusion",
+      "sha": "0503951abd9c5dfe0fcf83b42f37d2077d6ef80a"
+    },
+    {
+      "pr": 20,
+      "name": "RUNTIME-DESKTOP-CONSOLIDATION-001",
+      "branch": "integration/runtime-desktop-001",
+      "sha": "c4c5b032f9342605208ab23441dfc6253e4743ac"
+    },
+    {
+      "pr": 21,
+      "name": "RUNTIME-REDTEAM-001",
+      "branch": "redteam/runtime-git-env-boundary-001",
+      "sha": "9ad2e190797dec2ff9657fa751f106d7f1dc8a11"
+    },
+    {
+      "pr": 23,
+      "name": "RUNTIME-JOURNAL-INTEGRITY-001",
+      "branch": "qual/001-journal-history-integrity",
+      "sha": "1623c5f6ed09e161e45937a4731f76d51f05e54f"
+    },
+    {
+      "pr": 24,
+      "name": "RUNTIME-CONTROL-TRUTH-001",
+      "branch": "runtime/007-control-truth-qual",
+      "sha": "78f573a38e4761495483935dcd1f71c15e6a5a71"
+    },
+    {
+      "pr": 25,
+      "name": "FIRST-WINDOWS-PREFLIGHT-001",
+      "branch": "redteam/first-windows-preflight-native-node",
+      "sha": "c8b47ebf1d216cf65497cffa66ec3a78a6caaa83"
+    },
+    {
+      "pr": 26,
+      "name": "SPECIMEN-OBSERVER-PS51-001",
+      "branch": "redteam/specimen-observer-powershell51",
+      "sha": "e138a373c25cc004a2a5acabc97a70b422d2c3c3"
+    },
+    {
+      "pr": 27,
+      "name": "FIXTURE-NO-CLOBBER-001",
+      "branch": "redteam/fixture-no-clobber",
+      "sha": "44b3bb6f69bcdc795ba3e816a91fdbf2449aa780"
+    },
+    {
+      "pr": 28,
+      "name": "RUNTIME-PROVIDER-OUTCOME-001",
+      "branch": "runtime/008-provider-outcome-qual",
+      "sha": "946fcbae31b07bd96ee102031ed4f1a356c42b05"
+    },
+    {
+      "pr": 29,
+      "name": "SPECIMEN-PATH-GUARD-001",
+      "branch": "redteam/specimen-cross-volume-guard",
+      "sha": "f28c660eb29d9fe4e9087914e74665d47506448a"
+    },
+    {
+      "pr": 30,
+      "name": "SPECIMEN-LAUNCH-LIFECYCLE-001",
+      "branch": "redteam/specimen-launch-observer-lifecycle",
+      "sha": "8a9153f4ff676cd721847434932676847c772b33"
+    },
+    {
+      "pr": 31,
+      "name": "RUNTIME-GIT-BOUNDARY-QUAL-001",
+      "branch": "runtime/009-git-boundary-qual",
+      "sha": "410567cf401c74632691b37a29a053eb9f9bb69e"
+    },
+    {
+      "pr": 32,
+      "name": "SPECIMEN-EXPERIMENT-PACKET-001",
+      "branch": "specimen/008-experiment-packet",
+      "sha": "b72f8e431a1efdc9248aa9a00b5d087824b66ea0"
+    },
+    {
+      "pr": 33,
+      "name": "RUNTIME-RECOVERY-OWNERSHIP-001",
+      "branch": "qual/002-recovery-ownership",
+      "sha": "d84843130477e80d0259f969cdb4fd2eedec5366"
+    },
+    {
+      "pr": 34,
+      "name": "RUNTIME-DEFINITIVE-001",
+      "branch": "integration/runtime-definitive-001",
+      "sha": "aa9810ea4ad5a4a51dc16ca2a985996480b2ec24"
+    },
+    {
+      "pr": 35,
+      "name": "SPECIMEN-DEFINITIVE-001",
+      "branch": "integration/specimen-definitive-001",
+      "sha": "35d9a615e034ea6080e77c7d2e39a9a1538a1fbb"
+    }
+  ]
+}

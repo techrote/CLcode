@@ -24,6 +24,20 @@ Success means a user can operate a desktop Code workspace, initiate an agent tas
 
 A standalone GPTopus configuration or chat interface is an important preliminary experiment, **not** sufficient completion of this milestone.
 
+## Hostless runtime prototype
+
+**HOSTLESS-RUN-001 is implemented on this branch as a Draft engineering slice.** It adds a CLcode-owned principal-agent loop, scoped Read/Edit/Test/local-Git tools, durable run events, hard steering/cancellation, and a stdio JSONL service intended as the Desktop/backend seam. Provider requests are routed through an **exactly pinned GPTopus donor checkout** rather than a second provider stack.
+
+Local mechanical verification: **8/8 Node tests pass**, including real filesystem/process/Git effects and cancellation of an active test subprocess. This is **not** a live-provider acceptance claim: E02 and E06 remain NOT RUN until executed with an authorized non-Claude provider on the disposable PC.
+
+See **[HOSTLESS-RUN-001](docs/HOSTLESS-RUN-001.md)** for the implementation boundary and first live Windows procedure.
+
+## Desktop integration seam
+
+**DESKTOP-CLIENT-001** adds a tested process client, run follower and provider-neutral UI projection over the hostless runtime. The desktop/specimen layer can now consume run/model/tool/steering state without importing GPTopus or receiving provider credentials. Local stacked verification is **17/17 tests passing**; graphical Desktop acceptance remains unrun.
+
+See **[DESKTOP-CLIENT-001](docs/DESKTOP-CLIENT-001.md)**.
+
 ## Planning documents
 
 - **[Implementation roadmap — START HERE](docs/ROADMAP.md)** — two parallel tracks, the first coding assignment, real acceptance gates, and stop conditions.

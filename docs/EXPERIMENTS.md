@@ -17,6 +17,29 @@ The target is **CLcode Desktop Code**. CLI and GPTopus web-panel trials are step
 - **Recovery:** distinguish whether a run ended, was cancelled, remained recoverable, or was orphaned.
 - **Failure handling:** a negative result is useful. Preserve minimal logs and a reproduction; avoid adding permanent CI machinery in response.
 
+## Engineering verification — not an E-gate
+
+### HOSTLESS-RUN-001 mechanical verification
+
+**Status: PASS (mock provider + real local tool effects), 2026-11-23.**
+
+This is an implementation test, **not** E02/E06 acceptance. The CLcode-owned controller was exercised locally with a deterministic fake principal model while its tools performed genuine filesystem edits, `node --test` execution, Git diff and a local Git commit.
+
+Observed test coverage:
+
+- real Read → Edit → Test → local commit loop;
+- project-root escape rejection;
+- hard steering cancels an in-progress model response and restarts the productive step with the operator instruction;
+- cross-process-style cancellation reaches the provider;
+- cancellation aborts a long-running local test subprocess;
+- GPTopus adapter rejects a donor SHA mismatch and reconstructs paged bridge responses;
+- runtime service returns a durable run ID while work continues and exposes status/events/list/workers;
+- stdio JSONL request/response boundary handles valid calls and structured errors.
+
+Local result: **8/8 tests passed** and all JavaScript modules passed `node --check`. The exact implementation is documented in [HOSTLESS-RUN-001](HOSTLESS-RUN-001.md).
+
+**Still NOT RUN:** a real provider request with Claude Code absent (E02), and the same Read → Edit → Test loop driven by a real non-Claude provider on the disposable PC (E06).
+
 ## Initial trial cards
 
 | ID | Name | Status | Objective |
