@@ -26,3 +26,10 @@ test('GPTopus adapter verifies donor pin, clean source and paged bridge contract
     await assert.rejects(new GPTopusAdapter({root,expectedSha:sha}).load(),/working tree is not clean/);
   } finally { rmSync(root,{recursive:true,force:true}); }
 });
+
+test('invalid paging preserves the accepted response identity', async () => {
+  const adapter=new GPTopusAdapter({root:'.'});
+  adapter.loaded={dispatch:async()=>({chunk:'{}'})};
+  await assert.rejects(adapter.unpack({id:'resp_page',status:'completed',paged:true,pages:1,length:2}),
+    error=>error.responseId==='resp_page' && error.usageDisposition==='ambiguous');
+});

@@ -119,3 +119,30 @@ test('ambiguous operator cancellation is not reported as confirmed', async () =>
     assert(!controller.events(runId).some(e=>e.type==='model.cancelled'));
   } finally {rmSync(root,{recursive:true,force:true});}
 });
+
+test('ambiguous create preserves accounting request ID and does not retry', async () => {
+  const {root,project}=fixture();
+  try {
+    const provider=new PollingProvider();
+    provider.create=async args=>{provider.creates.push(args); const e=new Error('response lost'); e.usageDisposition='ambiguous'; e.responseId='resp_lost'; throw e;};
+    const controller=new RunController({stateDir:join(root,'state'),provider});
+    const runId='RAMBIGCREATE';
+    const result=await controller.spawn({projectRoot:project,worker:'mock',task:'Wait',runId});
+    assert.equal(result.status,'incomplete'); assert.equal(result.currentResponseId,'resp_lost');
+    assert.equal(result.requestId,runId+':1'); assert.equal(provider.creates.length,1);
+    assert.equal(provider.creates[0].requestId,result.requestId);
+    assert(controller.events(runId).some(e=>e.type==='model.outcome_unknown'));
+  } finally {rmSync(root,{recursive:true,force:true});}
+});
+
+test('poll failure preserves accepted identity and marks remote outcome unknown', async () => {
+  const {root,project}=fixture();
+  try {
+    const provider=new PollingProvider();
+    provider.poll=async()=>{throw new Error('transport unavailable')};
+    const controller=new RunController({stateDir:join(root,'state'),provider,pollIntervalMs:1});
+    const result=await controller.spawn({projectRoot:project,worker:'mock',task:'Wait',runId:'RPOLLFAIL01'});
+    assert.equal(result.status,'incomplete'); assert.equal(result.currentResponseId,'resp_poll_1');
+    assert.equal(result.providerState,'unknown'); assert.equal(provider.creates.length,1);
+  } finally {rmSync(root,{recursive:true,force:true});}
+});

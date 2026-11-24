@@ -57,19 +57,20 @@ function addTimeline(view, event, category, label, detail = null) {
 }
 
 function addUsage(view, payload) {
-  const usage = payload?.usage;
+  const usage = payload?.usageStatus === 'unknown' ? null : payload?.usage;
   if (usage && typeof usage === 'object') {
     for (const key of ['input', 'cached', 'output', 'total']) {
       const value = cleanNumber(usage[key]);
       if (value !== null && value >= 0) view.usage[key] += value;
       else if (usage[key] !== undefined) view.usage.unknown = true;
     }
-  } else if (payload?.usage === null) {
+  } else {
     view.usage.unknown = true;
   }
   const usd = cleanNumber(payload?.estimatedUsd);
-  if (usd !== null && usd >= 0) view.usage.estimatedUsd += usd;
-  else if (payload?.estimatedUsd !== undefined && payload?.estimatedUsd !== null) view.usage.costUnknown = true;
+  if (payload?.priceStatus === 'free' && usd === 0) return;
+  if (usage && usd !== null && usd >= 0) view.usage.estimatedUsd += usd;
+  else view.usage.costUnknown = true;
 }
 
 export function createRunView(seed = {}) {
@@ -91,7 +92,7 @@ export function createRunView(seed = {}) {
     createdAt: seed.createdAt ?? null,
     updatedAt: seed.updatedAt ?? null,
     finishedAt: seed.finishedAt ?? null,
-    lastSequence: Number(seed.lastSequence ?? 0),
+    lastSequence: 0,
     highestSeenSequence: Number(seed.lastSequence ?? 0),
     gapDetected: false,
     gaps: [],
@@ -100,6 +101,7 @@ export function createRunView(seed = {}) {
     steering: [],
     timeline: [],
     usage: { input: 0, cached: 0, output: 0, total: 0, estimatedUsd: 0, unknown: false, costUnknown: false },
+    accountedResponseIds: [],
   };
 }
 
@@ -121,7 +123,7 @@ export function applyRuntimeEvent(view, event) {
   if (!Number.isInteger(sequence) || sequence <= 0) return view;
   if (sequence <= view.lastSequence) return view; // replay/duplicate safe
 
-  if (view.lastSequence > 0 && sequence > view.lastSequence + 1) {
+  if (sequence > view.lastSequence + 1) {
     view.gapDetected = true;
     view.gaps.push({ after: view.lastSequence, before: sequence });
   }
@@ -173,6 +175,9 @@ export function applyRuntimeEvent(view, event) {
       const step = stepRecord(view, p.step);
       step.status = p.status ?? 'accepted';
       step.responseId = p.responseId ?? step.responseId;
+      step.model = p.model ?? null;
+      step.substitutedFrom = p.substitutedFrom ?? null;
+      step.serviceTier = p.serviceTier ?? null;
       view.currentResponseId = p.responseId ?? view.currentResponseId;
       addTimeline(view, event, 'model', `Model step ${step.step} accepted`, p);
       break;
@@ -185,17 +190,33 @@ export function applyRuntimeEvent(view, event) {
       break;
     }
     case 'model.cancelled':
+      if (!p.responseId || !view.accountedResponseIds.includes(p.responseId)) {
+        addUsage(view, p.outcome ?? {});
+        if (p.responseId) view.accountedResponseIds.push(p.responseId);
+      }
       addTimeline(view, event, 'model', 'Provider cancellation observed', p);
+      break;
+    case 'model.cancel_unconfirmed':
+    case 'model.outcome_unknown':
+      view.usage.unknown = true;
+      view.usage.costUnknown = true;
+      addTimeline(view, event, 'model', 'Provider outcome unconfirmed', p);
       break;
     case 'model.completed': {
       const step = stepRecord(view, p.step);
       step.status = p.status ?? 'completed';
       step.responseId = p.responseId ?? step.responseId;
+      step.model = p.model ?? step.model ?? null;
+      step.substitutedFrom = p.substitutedFrom ?? step.substitutedFrom ?? null;
+      step.serviceTier = p.serviceTier ?? step.serviceTier ?? null;
       step.text = String(p.text ?? '');
       step.usage = clone(p.usage ?? null);
       step.estimatedUsd = p.estimatedUsd ?? null;
       view.currentResponseId = null;
-      addUsage(view, p);
+      if (!p.responseId || !view.accountedResponseIds.includes(p.responseId)) {
+        addUsage(view, p);
+        if (p.responseId) view.accountedResponseIds.push(p.responseId);
+      }
       addTimeline(view, event, 'model', `Model step ${step.step} completed`, { status: p.status, responseId: p.responseId, usage: p.usage, estimatedUsd: p.estimatedUsd });
       break;
     }
