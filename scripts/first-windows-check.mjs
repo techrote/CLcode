@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const root = resolve(process.cwd());
@@ -19,6 +19,21 @@ function run(name, file, args = []) {
 }
 
 let ok = true;
+const componentFile = join(root, 'docs', 'FIRST-WINDOWS-COMPONENTS.json');
+if (!existsSync(componentFile)) {
+  process.stdout.write(`MISS  Component pin manifest: ${componentFile}\n`);
+  ok = false;
+} else {
+  const componentManifest = JSON.parse(readFileSync(componentFile, 'utf8'));
+  for (const component of componentManifest.components ?? []) {
+    const verify = spawnSync('git', ['merge-base', '--is-ancestor', component.sha, 'HEAD'], { cwd: root, encoding: 'utf8', windowsHide: true });
+    const good = verify.status === 0;
+    results.push({ name: `Component PR #${component.pr} ${component.name}`, ok: good, status: verify.status, stdout: '', stderr: String(verify.stderr ?? '').slice(-1000) });
+    process.stdout.write(`${good ? 'PASS' : 'FAIL'}  Component PR #${component.pr} ${component.name} @ ${component.sha.slice(0,12)}\n`);
+    ok = good && ok;
+  }
+}
+
 // package.json is the canonical test command and avoids platform-specific shell glob behavior.
 ok = run('Node runtime/desktop tests', process.platform === 'win32' ? 'npm.cmd' : 'npm', ['test']) && ok;
 for (const [name, script] of [

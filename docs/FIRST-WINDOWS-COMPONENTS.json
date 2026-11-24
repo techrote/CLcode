@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-24",
+  "purpose": "FIRST-WINDOWS-001 exact composition pins. Every repository component SHA must be an ancestor of the evaluator checkout.",
+  "gptopusDonor": "849627463c3e2be660f9d24976320b072c107b34",
+  "components": [
+    {
+      "pr": 3,
+      "name": "SPECIMEN-LAB-001",
+      "branch": "specimen/001-windows-lab",
+      "sha": "2210b6494e33063c3373c06167f23d6d05d8f859"
+    },
+    {
+      "pr": 6,
+      "name": "SPECIMEN-MAP-001",
+      "branch": "specimen/002-control-path-map",
+      "sha": "b16909037b0fcfba1af4bddbc926218f62500059"
+    },
+    {
+      "pr": 7,
+      "name": "SPECIMEN-SURGERY-001",
+      "branch": "specimen/003-guarded-surgery",
+      "sha": "db27cd1c4eb7e949581f31d528bfb4a0efab8d79"
+    },
+    {
+      "pr": 8,
+      "name": "SPECIMEN-LAUNCH-001",
+      "branch": "specimen/004-launch-trace",
+      "sha": "cb3a2fc242cd6faf2be38d3587641dbd276d1037"
+    },
+    {
+      "pr": 4,
+      "name": "HOSTLESS-RUN-001",
+      "branch": "runtime/001-hostless-agent",
+      "sha": "0a4eaf52cde00b85faf0698a006e0879adf6820e"
+    },
+    {
+      "pr": 9,
+      "name": "RUNTIME-HARDENING-001",
+      "branch": "runtime/002-windows-integrity",
+      "sha": "175b2a9e58dd1a9eb519fb96828581bb81eb1bf4"
+    },
+    {
+      "pr": 5,
+      "name": "DESKTOP-CLIENT-001",
+      "branch": "desktop/001-runtime-client",
+      "sha": "b76c186017535ed324afa7614da9ade4a4815b8f"
+    }
+  ]
+}

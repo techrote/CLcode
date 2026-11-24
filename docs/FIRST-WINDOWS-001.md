@@ -18,6 +18,8 @@ The evaluator combines the current specimen lab/mapping/surgery/launch tooling w
 
 Use a normal Windows user session. Install only Git and a current Node LTS if missing. Do not install the standalone Claude Code CLI merely for this experiment.
 
+The evaluator also carries `docs/FIRST-WINDOWS-COMPONENTS.json`. Preflight verifies that every recorded review-stack SHA is actually an ancestor of the checkout, preventing a stale integration branch from silently omitting later fixes.
+
 From the CLcode evaluator checkout:
 
 ```powershell
