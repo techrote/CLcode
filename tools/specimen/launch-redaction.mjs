@@ -3,6 +3,7 @@ const SECRET_NAMES = '(?:api[_-]?key|token|access[_-]?token|refresh[_-]?token|au
 export function sanitizeCommandLine(value) {
   let text = String(value ?? '');
   if (!text) return '';
+  text = text.replace(/(https?:\/\/)[^\s/?#@]+@/gi, '$1[redacted]@');
   text = text.replace(/Bearer\s+[A-Za-z0-9._~+\/-]{8,}/gi, 'Bearer [redacted]');
   text = text.replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, 'sk-[redacted]');
   text = text.replace(new RegExp(`(\\b${SECRET_NAMES}\\b\\s*=\\s*)([^\\s"']+|"[^"]*"|'[^']*')`, 'gi'), '$1[redacted]');

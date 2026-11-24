@@ -16,8 +16,8 @@ try{
   mkdirSync(join(specimen,'resources'),{recursive:true});mkdirSync(baseline,{recursive:true});
   const body="const model='claude-sonnet';\n";writeFileSync(target,body);
   const sha=createHash('sha256').update(body).digest('hex');
-  writeFileSync(join(baseline,'manifest.json'),JSON.stringify({captureId:'baseline-test',createdAtUtc:'2026-11-24T00:00:00Z',hashesSkipped:false,filesCsv:'files.csv'}));
-  writeFileSync(join(baseline,'files.csv'),['Root,RelativePath,Length,LastWriteTimeUtc,SHA256,HashError',[q(specimen),q('resources/candidate.js'),body.length,q('2026-11-24T00:00:00Z'),sha,q('')].join(',')].join('\n')+'\n');
+  writeFileSync(join(baseline,'manifest.json'),'\uFEFF'+JSON.stringify({captureId:'baseline-test',createdAtUtc:'2026-11-24T00:00:00Z',hashesSkipped:false,filesCsv:'files.csv'}));
+  writeFileSync(join(baseline,'files.csv'),['\uFEFF"Root","RelativePath","Length","LastWriteTimeUtc","SHA256","HashError"',[q(specimen),q('resources/candidate.js'),body.length,q('2026-11-24T00:00:00Z'),sha,q('')].join(',')].join('\n')+'\n');
   const candidate={id:`file:${specimen.toLowerCase().replaceAll('\\','/')}/resources/candidate.js`,kind:'file',path:'resources/candidate.js',root:specimen,relativePath:'resources/candidate.js',fullPath:`${specimen}/resources/candidate.js`,sha256:sha,evidenceScore:88,surgeryScore:80,categories:['principal-model'],sources:['surface','runtime'],behaviorSourceCount:2,liveSourceCount:1,firstExperimentEligible:true,cautions:[],evidence:[{source:'surface'},{source:'runtime'}]};
   const hypotheses={createdAtUtc:'2026-11-24T00:01:00Z',candidates:[candidate]};writeFileSync(join(tmp,'hypotheses.json'),JSON.stringify(hypotheses));
   let p=spawnSync(process.execPath,[tool,'--hypotheses',join(tmp,'hypotheses.json'),'--baseline',baseline,'--objective','Test principal model selection seam','--out',out],{encoding:'utf8'});
@@ -25,6 +25,9 @@ try{
   const packet=JSON.parse(readFileSync(join(out,'experiment.json'),'utf8'));const patch=JSON.parse(readFileSync(join(out,'patch.json'),'utf8'));const md=readFileSync(join(out,'PACKET.md'),'utf8');
   assert.equal(packet.baseline.captureId,'baseline-test');assert.equal(packet.target.sha256,sha);assert.equal(patch.expectedSha256,sha);assert.equal(patch.target,'resources/candidate.js');assert.match(md,/Test principal model selection seam/);
 
+  p=spawnSync(process.execPath,[tool,'--hypotheses',join(tmp,'hypotheses.json'),'--baseline',baseline,'--objective','repeat','--out',out],{encoding:'utf8'});assert.notEqual(p.status,0);assert.equal(JSON.parse(readFileSync(join(out,'experiment.json'),'utf8')).objective,'Test principal model selection seam');
+  const missingSha={...hypotheses,candidates:[{...candidate,sha256:null}]};writeFileSync(join(tmp,'missing.json'),JSON.stringify(missingSha));
+  p=spawnSync(process.execPath,[tool,'--hypotheses',join(tmp,'missing.json'),'--baseline',baseline,'--objective','x','--out',join(tmp,'missing-out')],{encoding:'utf8'});assert.notEqual(p.status,0);assert.match(p.stderr,/no valid SHA-256/);
   const badSha={...hypotheses,candidates:[{...candidate,sha256:'0'.repeat(64)}]};writeFileSync(join(tmp,'badsha.json'),JSON.stringify(badSha));
   p=spawnSync(process.execPath,[tool,'--hypotheses',join(tmp,'badsha.json'),'--baseline',baseline,'--objective','x','--out',join(tmp,'bad')],{encoding:'utf8'});assert.notEqual(p.status,0);assert.match(p.stderr,/differs from baseline/i);
 
