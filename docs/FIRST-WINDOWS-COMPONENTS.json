@@ -69,6 +69,12 @@
       "name": "RUNTIME-DONOR-INTEGRITY-001",
       "branch": "runtime/004-donor-integrity",
       "sha": "3903f8b99c72adf5d4addb926b329517aa4b28f3"
+    },
+    {
+      "pr": 15,
+      "name": "SPECIMEN-ASAR-HARDENING-001",
+      "branch": "specimen/006-asar-explicit-archive",
+      "sha": "df3383d923b7b41bcb83c91f7cccf5f0b1772317"
     }
   ]
 }
