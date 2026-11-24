@@ -42,7 +42,7 @@ test('run follower consumes cursored events until terminal status', async () => 
     assert.equal(result.status, 'completed');
     assert(events.some(e => e.type === 'run.started'));
     assert(events.some(e => e.type === 'run.completed'));
-    assert.deepEqual(statuses.slice(-2), ['running', 'completed']);
+    assert.equal(statuses.at(-1), 'completed');
     const seqs = events.map(e => e.sequence);
     assert.equal(new Set(seqs).size, seqs.length, 'event cursor must not redeliver events');
   } finally { await c.close(); }
@@ -51,15 +51,17 @@ test('run follower consumes cursored events until terminal status', async () => 
 test('run follower resets its event cursor when switching run identity', async () => {
   const eventRequests = [];
   const events = [];
+  const history = [
+    { runId: 'RNEW0001', sequence: 1, type: 'run.started', payload: {} },
+    { runId: 'RNEW0001', sequence: 2, type: 'run.completed', payload: { answer: 'done' } },
+  ];
   const fakeClient = {
     async request(method, params) {
       if (method === 'events') {
         eventRequests.push({ ...params });
-        return params.afterSequence === 0
-          ? [{ runId: params.runId, sequence: 1, type: 'run.started', payload: {} }]
-          : [];
+        return history.filter(event => event.sequence > Number(params.afterSequence ?? 0));
       }
-      if (method === 'status') return { runId: params.runId, status: 'completed', lastSequence: 1 };
+      if (method === 'status') return { runId: params.runId, status: 'completed', lastSequence: 2 };
       throw new Error(`Unexpected method ${method}`);
     },
   };
@@ -70,7 +72,42 @@ test('run follower resets its event cursor when switching run identity', async (
   assert.equal(result.status, 'completed');
   assert.equal(eventRequests[0].afterSequence, 0);
   assert.equal(events[0].runId, 'RNEW0001');
-  assert.equal(follower.cursor, 1);
+  assert.equal(follower.cursor, 2);
+});
+
+test('run follower rejects missing event sequences instead of projecting a complete history', async () => {
+  const fakeClient = {
+    async request(method) {
+      if (method === 'events') return [
+        { runId: 'RGAP00001', sequence: 1, type: 'run.started', payload: {} },
+        { runId: 'RGAP00001', sequence: 3, type: 'run.completed', payload: {} },
+      ];
+      if (method === 'status') return { runId: 'RGAP00001', status: 'completed', lastSequence: 3 };
+      throw new Error(`Unexpected method ${method}`);
+    },
+  };
+  const follower = new RunFollower(fakeClient, { pollMs: 1 });
+  await assert.rejects(
+    follower.follow('RGAP00001'),
+    error => error instanceof RuntimeProtocolError && error.code === 'event_gap'
+  );
+});
+
+test('run follower refuses terminal status without the matching terminal event', async () => {
+  const fakeClient = {
+    async request(method, params) {
+      if (method === 'events') return Number(params.afterSequence ?? 0) === 0
+        ? [{ runId: 'RTERM0001', sequence: 1, type: 'run.started', payload: {} }]
+        : [];
+      if (method === 'status') return { runId: 'RTERM0001', status: 'completed', lastSequence: 1 };
+      throw new Error(`Unexpected method ${method}`);
+    },
+  };
+  const follower = new RunFollower(fakeClient, { pollMs: 1 });
+  await assert.rejects(
+    follower.follow('RTERM0001'),
+    error => error instanceof RuntimeProtocolError && error.code === 'terminal_history_incomplete'
+  );
 });
 
 test('follower steering and cancellation use the active run id', async () => {

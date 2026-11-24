@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
 const SAFE_RUN = /^R[0-9A-Z]{8,24}$/;
+const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'incomplete', 'step_limit', 'time_limit', 'interrupted']);
 const now = () => new Date().toISOString();
 const safeRun = id => {
   const value = String(id ?? '').toUpperCase();
@@ -28,8 +29,14 @@ export class RunStore {
 
   init(summary) {
     const dir = this.runDir(summary.runId);
-    mkdirSync(join(dir, 'control'), { recursive: true });
-    const initial = { ...summary, createdAt: summary.createdAt ?? now(), updatedAt: now(), lastSequence: 0 };
+    try {
+      mkdirSync(dir);
+    } catch (error) {
+      if (error?.code === 'EEXIST') throw new Error(`Run ${safeRun(summary.runId)} already exists.`);
+      throw error;
+    }
+    mkdirSync(join(dir, 'control'));
+    const initial = { ...summary, runId: safeRun(summary.runId), createdAt: summary.createdAt ?? now(), updatedAt: now(), lastSequence: 0 };
     this.writeSummary(initial);
     return initial;
   }
@@ -38,7 +45,9 @@ export class RunStore {
     const dir = this.runDir(runId);
     mkdirSync(dir, { recursive: true });
     const summary = this.readSummary(runId);
-    const sequence = Number(summary?.lastSequence ?? 0) + 1;
+    if (!summary) throw new Error(`Unknown run ${runId}.`);
+    const prior = this.readEvents(runId, 0);
+    const sequence = Number(prior.at(-1)?.sequence ?? 0) + 1;
     const event = { runId: safeRun(runId), sequence, at: now(), type, payload };
     appendFileSync(join(dir, 'events.jsonl'), `${JSON.stringify(event)}\n`, { encoding: 'utf8', mode: 0o600 });
     this.patchSummary(runId, { lastSequence: sequence });
@@ -46,16 +55,38 @@ export class RunStore {
   }
 
   readEvents(runId, afterSequence = 0) {
-    const file = join(this.runDir(runId), 'events.jsonl');
+    const id = safeRun(runId);
+    const file = join(this.runDir(id), 'events.jsonl');
     if (!existsSync(file)) return [];
-    return readFileSync(file, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line)).filter(e => e.sequence > afterSequence);
+    const raw = readFileSync(file, 'utf8');
+    if (!raw) return [];
+    if (!raw.endsWith('\n')) throw new Error(`Event journal for ${id} ends with a partial record.`);
+    const lines = raw.split('\n').slice(0, -1);
+    const events = [];
+    for (let i = 0; i < lines.length; i++) {
+      let event;
+      try { event = JSON.parse(lines[i]); }
+      catch { throw new Error(`Event journal for ${id} is corrupt at line ${i + 1}.`); }
+      if (event?.runId !== id) throw new Error(`Event journal for ${id} contains a mismatched run id at line ${i + 1}.`);
+      if (!Number.isInteger(event?.sequence) || event.sequence !== i + 1) {
+        throw new Error(`Event journal for ${id} has a missing or duplicate sequence at line ${i + 1}.`);
+      }
+      events.push(event);
+    }
+    return events.filter(e => e.sequence > afterSequence);
   }
 
   summaryFile(runId) { return join(this.runDir(runId), 'summary.json'); }
 
   readSummary(runId) {
-    try { return JSON.parse(readFileSync(this.summaryFile(runId), 'utf8')); }
-    catch { return null; }
+    const id = safeRun(runId);
+    const file = this.summaryFile(id);
+    if (!existsSync(file)) return null;
+    let summary;
+    try { summary = JSON.parse(readFileSync(file, 'utf8')); }
+    catch { throw new Error(`Run summary for ${id} is corrupt.`); }
+    if (summary?.runId !== id) throw new Error(`Run summary for ${id} contains a mismatched run id.`);
+    return summary;
   }
 
   writeSummary(summary) {
@@ -81,8 +112,11 @@ export class RunStore {
   }
 
   enqueueControl(runId, control) {
-    const dir = join(this.runDir(runId), 'control');
-    if (!existsSync(this.summaryFile(runId))) throw new Error(`Unknown run ${runId}.`);
+    const id = safeRun(runId);
+    const summary = this.readSummary(id);
+    if (!summary) throw new Error(`Unknown run ${id}.`);
+    if (TERMINAL.has(summary.status)) throw new Error(`Run ${id} is already terminal (${summary.status}); control was not accepted.`);
+    const dir = join(this.runDir(id), 'control');
     mkdirSync(dir, { recursive: true });
     const rec = {
       id: `${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`,
