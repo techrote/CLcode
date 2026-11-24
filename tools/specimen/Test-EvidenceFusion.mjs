@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 const tmp=mkdtempSync(join(tmpdir(),'clcode-fusion-')), out=join(tmp,'out');
 try{
   const surface={candidates:[
-    {root:'C:/App',relativePath:'Claude.exe',score:24,categories:['engine-process','services-update'],hitCount:4,special:true},
+    {root:'C:/App',relativePath:'Claude.exe',size:1234,sha256:'c'.repeat(64),score:24,categories:['engine-process','services-update'],hitCount:4,special:true},
     {root:'C:/App',relativePath:'resources/app.asar',score:18,categories:['principal-model'],hitCount:3,special:true}
   ]};
   const asar={archives:[{root:'C:/App',archiveRelativePath:'resources/app.asar'}],candidates:[
@@ -26,9 +26,9 @@ try{
   const fused=JSON.parse(readFileSync(join(out,'hypotheses.json'),'utf8'));
   assert.equal(fused.integrity.assessment,'enforced');
   const claude=fused.candidates.find(c=>c.path==='Claude.exe'||c.path==='C:/App/Claude.exe');
-  assert(claude);assert(claude.sources.includes('surface'));assert(claude.sources.includes('runtime'));assert(claude.sources.includes('launch'));assert.equal(claude.firstExperimentEligible,true);assert(claude.surgeryScore<claude.evidenceScore);assert(claude.cautions.some(x=>/signing\/update risk/.test(x)));
+  assert(claude);assert.equal(claude.root,'C:/App');assert.equal(claude.relativePath,'Claude.exe');assert.equal(claude.sha256,'c'.repeat(64));assert.equal(claude.size,1234);assert(claude.sources.includes('surface'));assert(claude.sources.includes('runtime'));assert(claude.sources.includes('launch'));assert.equal(claude.firstExperimentEligible,true);assert(claude.surgeryScore<claude.evidenceScore);assert(claude.cautions.some(x=>/signing\/update risk/.test(x)));
   const internal=fused.candidates.find(c=>c.path==='resources/app.asar::main.js');
-  assert(internal);assert(internal.cautions.some(x=>/integrity validation is enabled/.test(x)));assert(internal.surgeryScore<internal.evidenceScore);assert.equal(internal.firstExperimentEligible,false);
+  assert(internal);assert.equal(internal.archiveRelativePath,'resources/app.asar');assert.equal(internal.memberPath,'main.js');assert.equal(internal.memberSha256,'a'.repeat(64));assert(internal.cautions.some(x=>/integrity validation is enabled/.test(x)));assert(internal.surgeryScore<internal.evidenceScore);assert.equal(internal.firstExperimentEligible,false);
   const code=fused.candidates.find(c=>/claude-code\.exe$/i.test(c.path));assert(code);assert(code.categories.includes('engine-process'));assert(code.categories.includes('principal-model'));
   const report=readFileSync(join(out,'HYPOTHESES.md'),'utf8');assert.match(report,/First-experiment shortlist/);assert.match(report,/ASAR integrity assessment:\*\* enforced/);assert.match(report,/Claude\.exe/);
   console.log('CLcode specimen evidence fusion self-test: PASS');

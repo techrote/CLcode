@@ -100,41 +100,7 @@ node .\tools\specimen\Test-SpecimenMap.mjs
 node .\tools\specimen\Test-RuntimeAnalysis.mjs
 ```
 
-## 5. Apply one hash-guarded reversible modification
-
-Before using the surgery tool against the real specimen:
-
-```powershell
-node .\tools\specimen\Test-SpecimenPatch.mjs
-```
-
-Create a patch specification from the exact candidate file:
-
-```powershell
-node .\tools\specimen\New-SpecimenPatchSpec.mjs `
-  --root 'C:\Path\To\Pinned\Desktop\Install' `
-  --target 'resources\candidate.js' `
-  --out "$env:USERPROFILE\clcode-specimen-lab\experiments\exp-001\patch.json"
-```
-
-After editing the generated spec, **dry-run first**:
-
-```powershell
-node .\tools\specimen\Apply-SpecimenPatch.mjs `
-  --root 'C:\Path\To\Pinned\Desktop\Install' `
-  --spec "$env:USERPROFILE\clcode-specimen-lab\experiments\exp-001\patch.json" `
-  --lab "$env:USERPROFILE\clcode-specimen-lab"
-```
-
-Only then add `--apply`. The tool verifies the exact baseline SHA, exact replacement count, root containment and post-write SHA, and creates an external backup + receipt. Roll back with:
-
-```powershell
-node .\tools\specimen\Rollback-SpecimenPatch.mjs PATH_TO_RECEIPT
-```
-
-See [SPECIMEN-SURGERY-001](../../docs/SPECIMEN-SURGERY-001.md) for the patch schema and evidence rules.
-
-## 6. Capture after one modification and compare
+## 5. Capture after one modification and compare
 
 ```powershell
 # after the bounded local specimen change
@@ -155,6 +121,7 @@ The comparison emits added/removed/changed file rows and a JSON summary. It does
 - The primary questions are **where principal model ownership lives**, **which process owns the agent/tool loop**, **how Desktop and the embedded engine communicate**, and **which Anthropic auth/quota/service dependencies are actually required for local Code operation**.
 - Local research modification and redistribution are separate questions. Do not commit or publish vendor binaries/assets merely because they are on a disposable PC.
 - The disposable disk is not a disposable credential boundary. Use scoped test credentials and avoid recording valuable secrets.
+
 
 ## ASAR internal mapping
 
@@ -219,3 +186,28 @@ node .\tools\specimen\Fuse-SpecimenEvidence.mjs `
 ```
 
 Review `HYPOTHESES.md`. The fusion report separates evidence relevance from surgery suitability and requires multiple behavioral evidence sources for its first-experiment shortlist. An empty shortlist means gather more evidence; it is not a reason to lower the threshold.
+
+
+## Prepare a baseline-bound surgery packet
+
+After `Fuse-SpecimenEvidence.mjs` produces an eligible first-experiment shortlist, bind one candidate to the exact hashed baseline capture before authoring a patch:
+
+```powershell
+$packet = Join-Path $env:USERPROFILE 'clcode-specimen-lab\experiments\exp-001'
+node .\tools\specimen\Prepare-SurgeryExperiment.mjs `
+  --hypotheses "$env:USERPROFILE\clcode-specimen-lab\maps\fusion\hypotheses.json" `
+  --baseline "$env:USERPROFILE\clcode-specimen-lab\captures\baseline-..." `
+  --rank 1 `
+  --objective 'Test one principal-control hypothesis.' `
+  --out $packet
+```
+
+Run the packet self-test before real use:
+
+```powershell
+node .\tools\specimen\Test-SurgeryExperimentPacket.mjs
+```
+
+The generator refuses ineligible hypotheses, stale/missing baseline hashes, ambiguous file bindings and ASAR-member candidates. It writes `experiment.json`, a hash-pinned `patch.json` skeleton and `PACKET.md`; it does **not** modify the specimen.
+
+See [SPECIMEN-EXPERIMENT-PACKET-001](../../docs/SPECIMEN-EXPERIMENT-PACKET-001.md).

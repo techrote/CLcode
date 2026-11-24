@@ -80,3 +80,27 @@ test('tool failures and terminal failure reason remain visible to UI', () => {
   assert.equal(out.reason, 'Model could not recover.');
   assert.equal(out.terminal, true);
 });
+
+test('fresh view does not treat summary sequence as consumed events', () => {
+  const view=createRunView({runId:'RVIEW0001',lastSequence:5});
+  applyRuntimeEvent(view,ev(1,'run.started'));
+  assert.equal(view.lastSequence,1); assert.equal(view.highestSeenSequence,5);
+  assert.equal(view.timeline.length,1);
+});
+test('missing first event is a detected gap', () => {
+  const view=createRunView();
+  applyRuntimeEvent(view,ev(3,'model.requested',{step:1}));
+  assert.equal(view.gapDetected,true);
+});
+test('unknown provider usage and null estimate never appear as known zero cost', () => {
+  const view=createRunView();
+  applyRuntimeEvent(view,ev(1,'model.completed',{responseId:'r1',usage:null,estimatedUsd:null}));
+  assert.equal(view.usage.unknown,true); assert.equal(view.usage.costUnknown,true);
+});
+test('confirmed cancelled response contributes its known usage only once', () => {
+  const view=createRunView();
+  const outcome={usage:{input:5,cached:0,output:2,total:7},estimatedUsd:0.001};
+  applyRuntimeEvent(view,ev(1,'model.cancelled',{responseId:'r1',outcome}));
+  applyRuntimeEvent(view,ev(2,'model.cancelled',{responseId:'r1',outcome}));
+  assert.equal(view.usage.total,7); assert.equal(view.usage.estimatedUsd,0.001);
+});

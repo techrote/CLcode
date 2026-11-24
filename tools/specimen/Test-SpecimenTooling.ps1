@@ -53,6 +53,14 @@ try {
     if ([int]$summary.added -ne 1) { throw "Expected 1 added file; found $($summary.added)." }
     if ([int]$summary.removed -ne 0) { throw "Expected 0 removed files; found $($summary.removed)." }
 
+    # Exercise the observer, not merely its parser; this catches reserved automatic variables.
+    & (Join-Path $toolDir 'Observe-SpecimenRuntime.ps1') -LabRoot $lab -DurationSeconds 5 -PollMilliseconds 200 -ProcessNameRegex '^powershell(?:\.exe)?$'
+    $observations = @(Get-ChildItem -LiteralPath (Join-Path $lab 'observations') -Directory)
+    if ($observations.Count -ne 1) { throw 'Expected one runtime observation.' }
+    $runtimeSummary = Get-Content -LiteralPath (Join-Path $observations[0].FullName 'summary.json') -Raw | ConvertFrom-Json
+    if ([int]$runtimeSummary.processSampleCount -lt 1) { throw 'Runtime observer did not capture the current PowerShell process; inspect CIM access.' }
+    Write-Host 'Runtime observer smoke test: PASS'
+
     Write-Host 'CLcode specimen tooling self-test: PASS'
     Write-Host "Parsed scripts: $($scripts.Count)"
     Write-Host 'Synthetic capture/experiment/compare workflow: PASS'

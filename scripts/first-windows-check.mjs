@@ -34,13 +34,14 @@ if (!existsSync(componentFile)) {
   }
 }
 
-// package.json is the canonical test command and avoids platform-specific shell glob behavior.
-ok = run('Node runtime/desktop tests', process.platform === 'win32' ? 'npm.cmd' : 'npm', ['test']) && ok;
+// Execute the same runner as package.json's test script without a shell or Windows batch shim.
+ok = run('Node runtime/desktop tests', 'node', ['scripts/run-tests.mjs']) && ok;
 for (const [name, script] of [
   ['Specimen static map self-test', 'tools/specimen/Test-SpecimenMap.mjs'],
   ['Specimen ASAR internal map self-test', 'tools/specimen/Test-AsarMap.mjs'],
   ['Specimen ASAR integrity self-test', 'tools/specimen/Test-AsarIntegrity.mjs'],
   ['Specimen evidence-fusion self-test', 'tools/specimen/Test-EvidenceFusion.mjs'],
+  ['Specimen surgery packet self-test', 'tools/specimen/Test-SurgeryExperimentPacket.mjs'],
   ['Specimen runtime-correlation self-test', 'tools/specimen/Test-RuntimeAnalysis.mjs'],
   ['Specimen guarded patch self-test', 'tools/specimen/Test-SpecimenPatch.mjs'],
   ['Specimen launch redaction/filter self-test', 'tools/specimen/Test-LaunchRedaction.mjs'],

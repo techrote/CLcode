@@ -2,7 +2,7 @@
 
 **Purpose:** one checkout for the first physical CLcode feasibility session. This is an **evaluation/HOLD composition**, not a replacement for the individual review PRs.
 
-The evaluator combines the current specimen lab/mapping/surgery/launch tooling with the hardened hostless runtime and Desktop client. RUNTIME-DESKTOP-CONSOLIDATION-001 / PR #20 is the canonical combined runtime/Desktop lineage, so subprocess isolation and the later admission/donor/follower fixes are inherited together rather than only meeting inside this evaluator. Its job is to collect honest evidence quickly, not to claim Desktop transplantation before it happens.
+The evaluator combines the current specimen lab/mapping/surgery/launch tooling with the hardened hostless runtime and Desktop client. The current physical candidate is composed around RUNTIME-DEFINITIVE-001 / PR #34 and SPECIMEN-DEFINITIVE-001 / PR #35, with FIRST-WINDOWS-PREFLIGHT-001 / PR #25 supplying the native-Node preflight entry point. RUNTIME-DESKTOP-CONSOLIDATION-001 / PR #20 is the canonical combined runtime/Desktop lineage, so subprocess isolation and the later admission/donor/follower fixes are inherited together rather than only meeting inside this evaluator. Its job is to collect honest evidence quickly, not to claim Desktop transplantation before it happens.
 
 ## Contents
 
@@ -18,7 +18,7 @@ The evaluator combines the current specimen lab/mapping/surgery/launch tooling w
 
 Use a normal Windows user session. Install only Git and a current Node LTS if missing. Do not install the standalone Claude Code CLI merely for this experiment.
 
-The evaluator also carries `docs/FIRST-WINDOWS-COMPONENTS.json`. Preflight verifies that every recorded review-stack SHA is actually an ancestor of the checkout, preventing a stale integration branch from silently omitting later fixes.
+The evaluator also carries `docs/FIRST-WINDOWS-COMPONENTS.json`. Preflight verifies every recorded review-stack SHA is an ancestor of the checkout. Schema v2 also names the definitive runtime/specimen/preflight heads and records superseded consolidation slices explicitly.
 
 From the CLcode evaluator checkout:
 
@@ -235,3 +235,17 @@ Useful sanitized return material is:
 - exact blockers/negative results.
 
 The first session is successful even if the Desktop surgery result is negative, provided it narrows the control path with reproducible evidence.
+
+Bind the selected eligible file candidate to the exact baseline capture before authoring any replacement:
+
+```powershell
+$packet = Join-Path $env:USERPROFILE 'clcode-specimen-lab\experiments\exp-001'
+node .\tools\specimen\Prepare-SurgeryExperiment.mjs \`
+  --hypotheses (Join-Path $fusion 'hypotheses.json') \`
+  --baseline 'C:\Users\YOU\clcode-specimen-lab\captures\baseline-...' \`
+  --rank 1 \`
+  --objective 'Test one evidence-backed principal-control hypothesis.' \`
+  --out $packet
+```
+
+The packet generator refuses stale/missing hashes, ambiguous bindings, ineligible candidates and ASAR-member targets. Review `PACKET.md` and edit exactly one replacement in `patch.json` before the dry-run.
