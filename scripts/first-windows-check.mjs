@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const root = resolve(process.cwd());
@@ -36,6 +36,21 @@ if (!existsSync(componentFile)) {
 
 // Execute the same runner as package.json's test script without a shell or Windows batch shim.
 ok = run('Node runtime/desktop tests', 'node', ['scripts/run-tests.mjs']) && ok;
+
+// Repeat the complete test corpus serially. The standalone definitive runtime
+// qualification is serial; the integrated evaluator must prove the same
+// adversarial/native interactions in the combined tree rather than relying on
+// the runtime-only result.
+const serialTestDir = join(root, 'test');
+const serialTests = existsSync(serialTestDir)
+  ? readdirSync(serialTestDir).filter(name => name.endsWith('.test.mjs')).sort().map(name => join(serialTestDir, name))
+  : [];
+if (!serialTests.length) {
+  process.stdout.write('MISS  Serial runtime/adversarial qualification: no test/*.test.mjs files\n');
+  ok = false;
+} else {
+  ok = run('Serial runtime/adversarial qualification', 'node', ['--test','--test-concurrency=1', ...serialTests]) && ok;
+}
 for (const [name, script] of [
   ['Specimen static map self-test', 'tools/specimen/Test-SpecimenMap.mjs'],
   ['Specimen ASAR internal map self-test', 'tools/specimen/Test-AsarMap.mjs'],

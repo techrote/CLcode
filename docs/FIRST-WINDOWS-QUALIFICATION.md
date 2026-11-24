@@ -1,17 +1,54 @@
 # FIRST-WINDOWS-QUALIFIED-001 — qualification record
 
-Status: HOLD. Single child evaluator of PR #10, PR #40.
+Status: **REFRESHED; EXACT INTEGRATED NATIVE-WINDOWS QUALIFICATION PENDING.**
 
-## Frozen pins
-- Runtime #37: 3320f10db6df3ec5949475dd1a609f7f9a9f9a26; [Linux 71/71 PASS](https://github.com/techrote/CLcode/actions/runs/45453728373).
-- Specimen #39: 871c210dae12334d63810efe3152e5e7f2e144ad; [native Windows specimen PASS](https://github.com/techrote/CLcode/actions/runs/45452653193). Its source/test blobs are unchanged from the Windows-tested revision.
-- Native preflight #25 retained; donor 849627463c3e2be660f9d24976320b072c107b34.
+Single evaluator: PR #40 / `integration/first-windows-qualified-001`.
 
-## Exact integrated qualification and open blocker
-[Native Windows run 45453533944](https://github.com/techrote/CLcode/actions/runs/45453533944) tested ec201df296b6dec85c092758c34cc6dad8d7f29a (then runtime fd73f9d0f719acff57c68044d355811daff1c997). All 34 ancestry checks, eight Node specimen suites and PowerShell specimen lab passed. Node runtime/Desktop: 32 passed, 22 failed, 12 cancelled of 66. Main production issue: Git top-level and requested project root use different Windows 8.3/long-path aliases; admission falsely rejects the correct root. Git fsmonitor positive-control tests also failed to create capture files on Windows; serial test latches cancelled after upstream admission rejection. [Runtime handoff](https://github.com/techrote/CLcode/pull/37#issuecomment-7139894659).
+## Exact authoritative inputs
 
-The subsequently introduced six adversarial tests initially failed (65/71); all 71 pass on the new runtime pin. They concern edit attribution, commit races, duplicate tool identity, repeated provider response identity and control-journal failure. The new Linux-qualified pin is included, but has not passed integrated Windows preflight. No claim that the Windows defects are fixed.
+- Runtime PR #37 — `8f85b5bcf994f988f1be9d3a885086660d146a82`
+  - exact-head serial qualification: **75/75 Linux PASS and 75/75 native Windows PASS**
+  - evidence: https://github.com/techrote/CLcode/actions/runs/45454567372
+  - includes closure of the reproduced Windows 8.3 path-identity and Git fsmonitor defects.
+- Specimen PR #39 — `871c210dae12334d63810efe3152e5e7f2e144ad`
+  - native Windows specimen qualification: https://github.com/techrote/CLcode/actions/runs/45452653193
+- Preflight PR #25 — `c8b47ebf1d216cf65497cffa66ec3a78a6caaa83`
+  - native-Node launch repair retained.
+- GPTopus donor pin — `849627463c3e2be660f9d24976320b072c107b34`.
 
-Temporary workflow is removed from the delivery tree. Keep the existing one-shot evidence. Refresh this same evaluator from the definitive runtime after native fixes, and perform an exact integrated Windows requalification before owner approval. Do not weaken positive controls, skip native cases, or choose an older green snapshot to evade new regressions.
+## Historical integrated failure retained
 
-E01/E02/E06, physical Desktop baseline/observations, any installed-specimen mutation and E07/E08 remain NOT RUN. Unknown provider outcome is STOP and reconcile, never automatic replay.
+Native Windows run https://github.com/techrote/CLcode/actions/runs/45453533944 tested an earlier evaluator/runtime and reproduced:
+- Windows 8.3 alias versus long-path admission mismatch;
+- Git fsmonitor positive-control portability defects;
+- downstream serial cancellation caused by the admission failure.
+
+Those defects were subsequently closed in canonical runtime PR #37. The standalone #37 PASS is **not** treated as proof that this refreshed combined evaluator passes.
+
+## Integrated qualification contract
+
+The exact refreshed PR #40 HEAD must pass `node scripts/first-windows-check.mjs` on native Windows.
+
+The evaluator preflight now performs both:
+1. the canonical full runtime/Desktop runner; and
+2. a second complete **serial** `test/*.test.mjs` pass with `--test-concurrency=1`.
+
+It also runs:
+- component ancestry/pin verification;
+- specimen static map;
+- ASAR internal map;
+- ASAR integrity;
+- evidence fusion;
+- surgery experiment packet;
+- runtime observation/correlation;
+- launch observer/redaction/lifecycle;
+- guarded patch/apply/rollback;
+- PowerShell 5.1 specimen tooling.
+
+The #37 test corpus supplies the native Windows path-identity, fsmonitor and descendant-process cancellation regressions. The evaluator-specific preflight regression is itself part of the test corpus.
+
+Only an exact combined native-Windows PASS may move this record to **READY FOR OWNER PHYSICAL/LIVE EVALUATION**.
+
+## Acceptance boundary
+
+Even after mechanical/source qualification, E01/E02/E06/E07/E08 remain NOT RUN. Installed-Desktop evidence, live provider behavior, first reversible specimen surgery and observed absence of Anthropic inference are separate owner/live gates.

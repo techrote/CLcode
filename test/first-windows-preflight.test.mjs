@@ -23,6 +23,7 @@ test('preflight invokes the canonical Node runner directly and propagates its fa
     write('docs/FIRST-WINDOWS-COMPONENTS.json', JSON.stringify({ schemaVersion: 1, components: [{ pr: 1, name: 'fixture', sha }] }));
     // No package.json or npm is required to run the canonical Node test script.
     write('scripts/run-tests.mjs', 'process.exit(0);');
+    write('test/fixture.test.mjs', "import test from 'node:test'; test('serial fixture', () => {});\n");
     for (const name of ['Test-SpecimenMap', 'Test-AsarMap', 'Test-AsarIntegrity', 'Test-EvidenceFusion', 'Test-SurgeryExperimentPacket', 'Test-RuntimeAnalysis', 'Test-SpecimenPatch', 'Test-LaunchRedaction']) {
       write('tools/specimen/' + name + '.mjs', 'process.exit(0);');
     }
@@ -31,6 +32,7 @@ test('preflight invokes the canonical Node runner directly and propagates its fa
     const passed = run();
     assert.equal(passed.status, 0, passed.stdout + passed.stderr);
     assert.match(passed.stdout, /PASS  Node runtime\/desktop tests/);
+    assert.match(passed.stdout, /PASS  Serial runtime\/adversarial qualification/);
     write('scripts/run-tests.mjs', 'process.exit(7);');
     const failed = run();
     assert.equal(failed.status, 1, failed.stdout + failed.stderr);

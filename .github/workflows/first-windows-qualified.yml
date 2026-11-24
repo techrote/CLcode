@@ -1,0 +1,49 @@
+name: FIRST-WINDOWS qualified integrated
+on:
+  push:
+    branches:
+      - integration/first-windows-qualified-001
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: first-windows-qualified
+  cancel-in-progress: true
+
+jobs:
+  integrated-native-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Exact source identity
+        run: |
+          git rev-parse HEAD
+          git --version
+          node --version
+          $PSVersionTable.PSVersion.ToString()
+          git status --porcelain=v1 --untracked-files=all
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Canonical integrated native-Windows preflight
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & node .\scripts\first-windows-check.mjs 2>&1 | Tee-Object -FilePath first-windows-preflight.log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) { exit $code }
+      - name: Preserve exact preflight log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: first-windows-preflight-${{ github.sha }}
+          path: first-windows-preflight.log
+          if-no-files-found: error
+          retention-days: 30

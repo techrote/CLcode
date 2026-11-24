@@ -16,7 +16,7 @@ test('GPTopus adapter verifies donor pin, clean source and paged bridge contract
     const sha=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
     const probe=join(root,'.git','clcode-fsmonitor-probe.sh'), capture=join(root,'.git','clcode-fsmonitor-capture.txt');
     writeFileSync(probe,'#!/bin/sh\nprintf "%s" "${OPENAI_API_KEY-}" > .git/clcode-fsmonitor-capture.txt\nprintf "token\\n"\n'); chmodSync(probe,0o755);
-    execFileSync('git',['config','core.fsmonitor',probe],{cwd:root});
+    execFileSync('git',['config','core.fsmonitor','sh .git/clcode-fsmonitor-probe.sh'],{cwd:root});
     execFileSync('git',['ls-files','-v','-z'],{cwd:root,env:{...process.env,OPENAI_API_KEY:'synthetic-positive-control'}});
     assert.equal(readFileSync(capture,'utf8'),'synthetic-positive-control'); rmSync(capture);
     const adapter=new GPTopusAdapter({root,expectedSha:sha,stateDir:join(root,'state'),env:{...process.env,OPENAI_API_KEY:'donor-secret-must-not-leak'}});
@@ -54,7 +54,7 @@ test('donor verification refuses external Git filters before provider modules lo
     const sha=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
     const probe=join(root,'.git','filter-probe.sh');
     writeFileSync(probe,'#!/bin/sh\nprintf ran > .git/filter-probe-ran\ncat\n'); chmodSync(probe,0o755);
-    execFileSync('git',['config','filter.spy.clean',probe],{cwd:root});
+    execFileSync('git',['config','filter.spy.clean','sh .git/filter-probe.sh'],{cwd:root});
     const adapter=new GPTopusAdapter({root,expectedSha:sha});
     await assert.rejects(adapter.load(),/External Git filters are not supported/);
     assert.equal(existsSync(capture),false,'donor clean filter must never execute');

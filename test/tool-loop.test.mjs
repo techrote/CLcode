@@ -104,7 +104,7 @@ test('admission Git probes cannot expose provider credentials to repository hook
   try {
     writeFileSync(probe, '#!/bin/sh\nprintf "%s" "${OPENAI_API_KEY-}" > .git/clcode-fsmonitor-capture.txt\nprintf "token\\n"\n');
     chmodSync(probe, 0o755);
-    execFileSync('git', ['config', 'core.fsmonitor', probe], { cwd: project });
+    execFileSync('git', ['config', 'core.fsmonitor', 'sh .git/clcode-fsmonitor-probe.sh'], { cwd: project });
     // Establish a positive control: the unguarded index scan really invokes the configured probe.
     execFileSync('git', ['ls-files', '-v', '-z'], { cwd: project, env: { ...process.env, OPENAI_API_KEY: 'synthetic-positive-control' } });
     assert.equal(readFileSync(capture, 'utf8'), 'synthetic-positive-control');
@@ -178,7 +178,7 @@ test('admission refuses external Git filters before the clean driver can execute
     const probe=join(project,'.git','filter-probe.sh'), capture=join(project,'.git','filter-probe-ran');
     writeFileSync(probe,'#!/bin/sh\nprintf ran > .git/filter-probe-ran\ncat\n');
     chmodSync(probe,0o755);
-    execFileSync('git',['config','filter.spy.clean',probe],{cwd:project});
+    execFileSync('git',['config','filter.spy.clean','sh .git/filter-probe.sh'],{cwd:project});
     execFileSync('git',['config','filter.spy.smudge','cat'],{cwd:project});
     const {ScopedTools}=await import('../src/runtime/tools.mjs');
     await assert.rejects(ScopedTools.create(project),/External Git filters are not supported/);
@@ -194,7 +194,7 @@ test('Git boundary re-checks attributes after admission before status or commit'
     const probe=join(project,'.git','filter-probe.sh'), capture=join(project,'.git','filter-probe-ran');
     writeFileSync(probe,'#!/bin/sh\nprintf ran > .git/filter-probe-ran\ncat\n');
     chmodSync(probe,0o755);
-    execFileSync('git',['config','filter.spy.clean',probe],{cwd:project});
+    execFileSync('git',['config','filter.spy.clean','sh .git/filter-probe.sh'],{cwd:project});
     writeFileSync(join(project,'.gitattributes'),'src/slug.mjs filter=spy\n');
     await assert.rejects(tools.gitLocal({action:'status'}),/External Git filters are not supported/);
     assert.equal(existsSync(capture),false,'post-admission filter command must not run');

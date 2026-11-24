@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "recordedAt": "2026-11-24",
-  "purpose": "FIRST-WINDOWS-001 definitive composition pins. Every listed SHA must be an ancestor of the evaluator checkout.",
+  "purpose": "FIRST-WINDOWS-QUALIFIED-001 source-exact composition pins. Every listed SHA must be an ancestor of the evaluator checkout.",
   "gptopusDonor": "849627463c3e2be660f9d24976320b072c107b34",
   "supersededReviewSlices": [
     {
@@ -13,7 +13,7 @@
   "definitive": {
     "runtime": {
       "pr": 37,
-      "sha": "3320f10db6df3ec5949475dd1a609f7f9a9f9a26"
+      "sha": "8f85b5bcf994f988f1be9d3a885086660d146a82"
     },
     "specimen": {
       "pr": 39,
@@ -219,9 +219,9 @@
     },
     {
       "pr": 37,
-      "name": "RUNTIME-DEFINITIVE-FILTER-QUAL",
+      "name": "RUNTIME-DEFINITIVE-QUAL-001",
       "branch": "integration/runtime-definitive-filter-qual",
-      "sha": "3320f10db6df3ec5949475dd1a609f7f9a9f9a26"
+      "sha": "8f85b5bcf994f988f1be9d3a885086660d146a82"
     },
     {
       "pr": 39,
@@ -229,5 +229,6 @@
       "branch": "specimen/009-physical-safety",
       "sha": "871c210dae12334d63810efe3152e5e7f2e144ad"
     }
-  ]
+  ],
+  "qualificationWorkflow": ".github/workflows/first-windows-qualified.yml"
 }

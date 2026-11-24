@@ -1,17 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, rmSync, writeFileSync, mkdtempSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync, mkdtempSync, mkdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { RunStore } from '../src/runtime/journal.mjs';
 import { RunController } from '../src/runtime/controller.mjs';
 import { RuntimeService } from '../src/runtime/service.mjs';
-import { RunFollower } from '../src/desktop/runtime-client.mjs';
-import { projectRunView } from '../src/desktop/run-view-model.mjs';
+import { RunFollower, RuntimeProcessClient } from '../src/desktop/runtime-client.mjs';
+import { projectRunView, createRunView, applyRuntimeEvent, applyRuntimeStatus } from '../src/desktop/run-view-model.mjs';
 import { GPTopusAdapter } from '../src/runtime/gptopus-adapter.mjs';
-import { ScopedTools } from '../src/runtime/tools.mjs';
-import { fixture, PollingProvider } from './helpers.mjs';
+import { ScopedTools, childEnv } from '../src/runtime/tools.mjs';
+import { fixture, PollingProvider, ScriptedProvider } from './helpers.mjs';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 function gate() { let open; const promise = new Promise(resolve => { open = resolve; }); return { promise, open }; }
@@ -298,4 +298,89 @@ test('control-journal failure during a live tool stops the process before local 
     await sleep(100);
     rmSync(root,{recursive:true,force:true});
   }
+});
+
+test('controller process death retains worktree ownership for explicit reconciliation', async () => {
+  const {root,project}=fixture(), state=join(root,'child-state'), ready=join(root,'child-ready');
+  const code = [
+    'import {RunController} from '+JSON.stringify(new URL('../src/runtime/controller.mjs',import.meta.url).href)+';',
+    "import {writeFileSync} from 'node:fs';",
+    'const provider={async settings(worker){return {name:worker,model:"mock",tools:true};},async create(){writeFileSync('+JSON.stringify(ready)+',"submitting");await new Promise(()=>setInterval(()=>{},1000));}};',
+    'await new RunController({stateDir:'+JSON.stringify(state)+',provider}).spawn({projectRoot:'+JSON.stringify(project)+',worker:"mock",task:"hold",runId:"RCRASH0001"});'
+  ].join('\n');
+  const child=spawn(process.execPath,['--input-type=module','-e',code],{stdio:'ignore',windowsHide:true,env:childEnv()});
+  const exited=new Promise(resolve=>{child.once('close',resolve);child.once('error',resolve);});
+  try {
+    await until(()=>existsSync(ready),10000);
+    const provider=immediateProvider();
+    const controller=new RunController({stateDir:join(root,'other-state'),provider});
+    const opts={projectRoot:project,worker:'mock',task:'retry',runId:'RCRASH0002'};
+    await assert.rejects(controller.spawn(opts),/lease|locked|active run/i);
+    child.kill(); await exited;
+    assert(existsSync(join(project,'.git','clcode-runtime.lease')));
+    await assert.rejects(controller.spawn(opts),/lease|locked|active run/i);
+    assert.equal(provider.creates.length,0);
+    const recovery=new RuntimeService({controller:new RunController({stateDir:state,provider}),provider});
+    assert.equal(recovery.status('RCRASH0001').ownership,'unverified');
+    assert.equal(recovery.status('RCRASH0001').status,'running');
+    await assert.rejects(recovery.invoke('cancel',{runId:'RCRASH0001'}),/unverified/i);
+  } finally {
+    if(child.exitCode===null&&child.signalCode===null) child.kill();
+    await exited; rmSync(root,{recursive:true,force:true});
+  }
+});
+
+test('real JSONL Desktop client follows a mock-provider read edit test commit run', async () => {
+  const {root,project}=fixture();
+  const code=[
+    'import {serve} from '+JSON.stringify(new URL('../src/server.mjs',import.meta.url).href)+';',
+    'import {RunController} from '+JSON.stringify(new URL('../src/runtime/controller.mjs',import.meta.url).href)+';',
+    'import {RuntimeService} from '+JSON.stringify(new URL('../src/runtime/service.mjs',import.meta.url).href)+';',
+    'import {ScriptedProvider} from '+JSON.stringify(new URL('./helpers.mjs',import.meta.url).href)+';',
+    'const provider=new ScriptedProvider();const controller=new RunController({stateDir:'+JSON.stringify(join(root,'state'))+',provider,pollIntervalMs:5});',
+    'await serve({service:new RuntimeService({controller,provider})});'
+  ].join('\n');
+  const client=new RuntimeProcessClient({args:['--input-type=module','-e',code],env:childEnv(),requestTimeoutMs:10000});
+  const view=createRunView(),events=[],statuses=[];
+  const follower=new RunFollower(client,{pollMs:10,onEvent:e=>{events.push(e);applyRuntimeEvent(view,e);},onStatus:s=>{statuses.push(s);applyRuntimeStatus(view,s);}});
+  try {
+    const result=await follower.spawnAndFollow({projectRoot:project,worker:'mock',task:'normalize slugs',runId:'RJSONLE2E1',maxSteps:10});
+    assert.equal(result.status,'completed');
+    assert.equal(follower.cursor,result.lastSequence);
+    assert.equal(events.at(-1).type,'run.completed');
+    assert.equal(view.terminal,true);
+    assert.equal(view.gapDetected,false);
+    assert(statuses.some(s=>s.ownership==='local'));
+    assert(events.some(e=>e.type==='tool.completed'&&e.payload.result?.commitVerified===true));
+    assert.equal(execFileSync('git',['log','-1','--format=%s'],{cwd:project,encoding:'utf8'}).trim(),'fix: normalize slugs');
+    assert.equal(execFileSync('git',['status','--porcelain'],{cwd:project,encoding:'utf8'}).trim(),'');
+  } finally {await client.close();rmSync(root,{recursive:true,force:true});}
+});
+
+test('actual project test process receives no synthetic provider secrets or Node injection variables', async () => {
+  const {root,project}=fixture(), marker=join(root,'env-observation.json');
+  const names=['OPENAI_API_KEY','ANTHROPIC_API_KEY','NODE_OPTIONS','NODE_PATH'];
+  const saved=Object.fromEntries(names.map(k=>[k,process.env[k]]));
+  try {
+    writeFileSync(join(project,'test','env-probe.test.mjs'),
+      "import {writeFileSync} from 'node:fs';writeFileSync("+JSON.stringify(marker)+",JSON.stringify(Object.fromEntries("+JSON.stringify(names)+".map(k=>[k,process.env[k]??null]))));");
+    execFileSync('git',['add','.'],{cwd:project});execFileSync('git',['commit','-m','fixture: env probe'],{cwd:project,stdio:'pipe'});
+    const tools=await ScopedTools.create(project);
+    for(const k of names) process.env[k]=k==='NODE_OPTIONS'?'--require=nonexistent-clcode-synthetic-module':'synthetic-not-a-real-secret';
+    await tools.runTest();
+    assert.deepEqual(JSON.parse(readFileSync(marker,'utf8')),Object.fromEntries(names.map(k=>[k,null])));
+  } finally {
+    for(const k of names) {if(saved[k]===undefined) delete process.env[k];else process.env[k]=saved[k];}
+    rmSync(root,{recursive:true,force:true});
+  }
+});
+
+test('project admission compares native canonical Git root but rejects a nested directory', async () => {
+  const {root,project}=fixture();
+  try {
+    const tools=await ScopedTools.create(project);
+    const expected=process.platform==='win32'?realpathSync.native(project):realpathSync(project);
+    assert.equal(tools.projectRoot,expected);
+    await assert.rejects(ScopedTools.create(join(project,'src')),/Git top-level directory/i);
+  } finally {rmSync(root,{recursive:true,force:true});}
 });
