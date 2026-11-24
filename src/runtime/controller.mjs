@@ -17,7 +17,15 @@ function toolOutput(call, result) {
 }
 
 function normalizeCalls(value) {
-  return Array.isArray(value?.calls) ? value.calls.filter(c => c && typeof c.name === 'string' && typeof c.call_id === 'string') : [];
+  if (value?.calls == null) return [];
+  if (!Array.isArray(value.calls)) throw new Error('Provider tool batch is not an array.');
+  const ids = new Set();
+  for (const call of value.calls) {
+    if (!call || typeof call.name !== 'string' || !call.name || typeof call.call_id !== 'string' || !call.call_id || ids.has(call.call_id)) throw new Error('Provider tool batch has malformed or duplicate call identity; no tools executed.');
+    if (call.args != null && (typeof call.args !== 'object' || Array.isArray(call.args))) throw new Error('Provider tool batch has malformed arguments; no tools executed.');
+    ids.add(call.call_id);
+  }
+  return value.calls;
 }
 
 export class RunController {
@@ -61,6 +69,7 @@ export class RunController {
     let previousResponseId;
     let input = task;
     let currentResponseId = null, currentRequestId = null;
+    const seenResponseIds = new Set();
     let remoteUnresolved = false, toolUnresolved = false, finishing = false;
     let cancelled = false;
     let cancellationConfirmed = false;
@@ -129,17 +138,25 @@ export class RunController {
       const promise = tools.execute(call.name, call.args ?? {}, { signal: toolAbort.signal })
         .then(result => { settled = true; return result; })
         .catch(error => { settled = true; return { ok: false, error: String(error?.message ?? error).slice(0, 1000) }; });
-      while (!settled) {
-        const result = await Promise.race([promise.then(value => ({ done: true, value })), sleep(200).then(() => ({ done: false }))]);
-        if (result.done) return result.value;
-        const toolControls = await applyControls();
-        if (toolControls.length) deferredSteer.push(...toolControls);
-        if (cancelled || checkDeadline()) {
-          toolAbort.abort();
-          return promise;
+      try {
+        while (!settled) {
+          const result = await Promise.race([promise.then(value => ({ done: true, value })), sleep(200).then(() => ({ done: false }))]);
+          if (result.done) return result.value;
+          const toolControls = await applyControls();
+          if (toolControls.length) deferredSteer.push(...toolControls);
+          if (cancelled || checkDeadline()) {
+            toolAbort.abort();
+            return promise;
+          }
         }
+        return promise;
+      } catch (error) {
+        // Storage/control errors cannot abandon a still-running subprocess.
+        // Stop and join the tool before publishing any local final state.
+        toolAbort.abort();
+        const result = await promise;
+        return { ...result, ok:false, controlFailure:true, error:String(error?.message ?? error).slice(0,1000) };
       }
-      return promise;
     };
 
     try {
@@ -177,6 +194,8 @@ export class RunController {
           return providerUnknown('create', error, requestId, error?.responseId);
         }
         if (typeof response?.id !== 'string' || !response.id) return providerUnknown('create', new Error('Provider returned no response ID.'), requestId);
+        if (seenResponseIds.has(response.id)) return providerUnknown('create', new Error('Provider reused a response ID for a new request; no tools executed.'), requestId, response.id);
+        seenResponseIds.add(response.id);
         currentResponseId = response.id;
         this.store.patchSummary(runId, { currentResponseId, providerState: response.status, currentResponseModel: response.model ?? null });
         this.store.event(runId, 'model.accepted', { step, requestId, responseId: currentResponseId, status: response.status,
@@ -274,10 +293,11 @@ export class RunController {
           if (cancelled) return finish('cancelled', { reason: 'Cancelled by operator.' });
           this.store.event(runId, 'tool.requested', { step, callId: call.call_id, name: call.name, args: call.args });
           const result = await executeTool(call);
-          toolUnresolved = result?.terminationConfirmed === false;
+          toolUnresolved = result?.terminationConfirmed === false || result?.effectUnknown === true;
           this.store.event(runId, 'tool.completed', { step, callId: call.call_id, name: call.name, result });
           outputs.push(toolOutput(call, result));
-          if (toolUnresolved) return finish('incomplete', { reason: 'Tool process-tree termination could not be confirmed.', toolState: 'unknown' });
+          if (toolUnresolved) return finish('incomplete', { reason: 'Tool termination or its resulting effect could not be confirmed.', toolState: 'unknown' });
+          if (result?.controlFailure) return finish('failed', { reason: 'Control ingestion failed; active tool was stopped: ' + result.error });
           deferredSteer.push(...await applyControls());
           if (cancelled) return finish('cancelled', { reason: 'Tool execution stopped by operator.' });
           if (checkDeadline()) return finish('time_limit', { reason: 'Run deadline reached during tool execution.' });

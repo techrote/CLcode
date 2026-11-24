@@ -1,5 +1,5 @@
 import { execFile, execFileSync, spawn } from 'node:child_process';
-import { lstatSync, readFileSync, realpathSync, statSync, writeFileSync, renameSync, mkdtempSync, rmSync, openSync, closeSync, accessSync, constants, unlinkSync } from 'node:fs';
+import { lstatSync, readFileSync, realpathSync, statSync, writeFileSync, renameSync, mkdtempSync, rmSync, openSync, closeSync, accessSync, constants, unlinkSync, mkdirSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { dirname, isAbsolute, join, relative, resolve, sep, delimiter } from 'node:path';
@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 const MAX_FILE_BYTES = 512_000;
+const MAX_ADMISSION_BYTES = 256_000_000;
 const MAX_OUTPUT = 200_000;
 
 // Child tools execute project code and local Git, so they must not inherit the
@@ -63,13 +64,13 @@ export function resolveExecutable(name, env = process.env, { rejectRoot = null }
   throw new Error(`Executable ${name} was not found on an absolute PATH entry outside the selected project.`);
 }
 
-export function assertNoExternalGitFilters(gitExecutable, cwd, env = childEnv()) {
+export function assertNoExternalGitFilters(gitExecutable, cwd, env = childEnv(), gitContext = []) {
   const options = { cwd, windowsHide: true, env, maxBuffer: 16_000_000, timeout: 10_000 };
-  const tracked = execFileSync(gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'ls-files', '-z'], options);
+  const tracked = execFileSync(gitExecutable, [...gitContext, '--no-optional-locks', '-c', 'core.fsmonitor=false', 'ls-files', '-z'], options);
   if (!tracked?.length) return;
   const output = execFileSync(
     gitExecutable,
-    ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'check-attr', '-z', 'filter', '--stdin'],
+    [...gitContext, '--no-optional-locks', '-c', 'core.fsmonitor=false', 'check-attr', '-z', 'filter', '--stdin'],
     { ...options, input: tracked, encoding: 'utf8' },
   );
   const parts = String(output).split('\0');
@@ -130,6 +131,9 @@ export class ScopedTools {
     this.toolTimeoutMs = options.toolTimeoutMs ?? 30_000;
     this.gitExecutable = options.gitExecutable ?? resolveExecutable('git', childEnv(), { rejectRoot: root });
     this.touched = new Map();
+    this.intended = new Map();
+    this.admissionHashes = null;
+    this.admissionIdentity = null;
   }
 
   static async create(projectRoot, options = {}) {
@@ -148,13 +152,43 @@ export class ScopedTools {
     return tools;
   }
 
+  gitProbe(args, { encoding = 'utf8', cwd = this.projectRoot, gitContext = [] } = {}) {
+    return execFileSync(this.gitExecutable, [...gitContext, '--no-optional-locks', '-c', 'core.fsmonitor=false', '--literal-pathspecs', ...args], { cwd, encoding, windowsHide: true, env: childEnv(), timeout: 10_000, maxBuffer: 16_000_000, stdio: ['ignore','pipe','pipe'] });
+  }
+
+  gitIdentity() {
+    return { head: this.gitProbe(['rev-parse','--verify','HEAD']).trim(), ref: this.gitProbe(['rev-parse','--symbolic-full-name','HEAD']).trim() };
+  }
+
   async verifyClean() {
     const cwd = this.projectRoot, env = childEnv();
+    const identity = this.gitIdentity();
     const flags = await execFileAsync(this.gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'ls-files', '-v', '-z'], { cwd, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
     if (flags.stdout.split('\0').some(entry => /^[a-zS] /.test(entry))) throw new Error('Project index flags hide worktree changes; clear assume-unchanged or skip-worktree before admission.');
     assertNoExternalGitFilters(this.gitExecutable, cwd, env);
+    // Capture the admitted bytes of eligible tracked files, not whatever bytes
+    // happen to be present at the first later model edit. Unsupported paths
+    // remain readable under the existing read policy but are not editable.
+    const hashes = new Map();
+    let total = 0;
+    for (const entry of flags.stdout.split('\0').filter(Boolean)) {
+      let file, info;
+      try { file = this.resolveExisting(entry.slice(2)); info = statSync(file); }
+      catch { continue; }
+      if (info.size > MAX_FILE_BYTES) continue;
+      const bytes = readFileSync(file);
+      if (bytes.length > MAX_FILE_BYTES) throw new Error('Project file changed size during admission; retry with a stable worktree.');
+      total += bytes.length;
+      if (total > MAX_ADMISSION_BYTES) throw new Error('Editable tracked-file admission snapshot exceeds its 256 MB bound; select a smaller qualification worktree.');
+      hashes.set(relative(cwd,file).split(sep).join('/'), { hash: sha256(bytes), mode: info.mode });
+    }
     const status = await execFileAsync(this.gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--untracked-files=all'], { cwd, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
     if (String(status.stdout ?? '').trim()) throw new Error('Project working tree must be clean before an agent run; commit, stash or discard existing changes first.');
+    const after = this.gitIdentity();
+    if (after.head !== identity.head || after.ref !== identity.ref) throw new Error('Git HEAD changed during admission.');
+    this.admissionHashes = hashes;
+    this.admissionIdentity = identity;
+    this.gitDir = realpathSync(this.gitProbe(['rev-parse','--absolute-git-dir']).trim());
   }
 
   async acquireRunLease(runId, stateDir) {
@@ -245,7 +279,12 @@ export class ScopedTools {
     const file = this.resolveExisting(path);
     const info = statSync(file);
     if (info.size > MAX_FILE_BYTES) throw new Error(`File exceeds ${MAX_FILE_BYTES} bytes.`);
+    const rel = relative(this.projectRoot, file).split(sep).join('/');
+    const baseline = this.admissionHashes?.get(rel);
+    if (!baseline) throw new Error('Refusing edit: file was not an eligible tracked file at clean admission.');
     const originalBytes = readFileSync(file);
+    const expected = this.touched.get(rel) ?? baseline.hash;
+    if (sha256(originalBytes) !== expected || (process.platform !== 'win32' && (info.mode & 0o111) !== (baseline.mode & 0o111))) throw new Error('Refusing edit: file changed outside CLcode ownership after admission or the last edit.');
     if (originalBytes.length > MAX_FILE_BYTES) throw new Error(`File exceeds ${MAX_FILE_BYTES} bytes.`);
     const original = originalBytes.toString('utf8');
     if (!Buffer.from(original, 'utf8').equals(originalBytes)) throw new Error('File is not lossless UTF-8 text.');
@@ -264,9 +303,9 @@ export class ScopedTools {
       if (sha256(readFileSync(file)) !== sha256(originalBytes)) throw new Error('File changed during edit; refusing replacement.');
       renameSync(tmp, file);
     } finally { if (created) rmSync(tmp, { force: true }); }
-    const rel = relative(this.projectRoot, file).split(sep).join('/');
     // Record the intended bytes, never a concurrent writer's post-rename bytes.
     this.touched.set(rel, sha256(intended));
+    this.intended.set(rel, { bytes: intended, mode: info.mode });
     return { ok: true, path: rel, replacements: replace_all ? matches : 1 };
   }
 
@@ -275,9 +314,10 @@ export class ScopedTools {
   }
 
   async gitExec(args, options) {
+    const { gitContext = [], ...execOptions } = options;
     const hooks = mkdtempSync(join(tmpdir(), 'clcode-empty-hooks-'));
     try {
-      return await this.exec(this.gitExecutable, ['-c', 'core.fsmonitor=false', '-c', `core.hooksPath=${hooks}`, '-c', 'commit.gpgsign=false', '--literal-pathspecs', ...args], options);
+      return await this.exec(this.gitExecutable, [...gitContext, '-c', 'core.fsmonitor=false', '-c', `core.hooksPath=${hooks}`, '-c', 'commit.gpgsign=false', '--literal-pathspecs', ...args], execOptions);
     } finally { rmSync(hooks, { recursive: true, force: true }); }
   }
 
@@ -299,12 +339,70 @@ export class ScopedTools {
         const current = sha256(readFileSync(file));
         if (current !== expected) throw new Error(`Refusing commit: ${rel} changed after CLcode's last edit.`);
       }
-      return this.gitExec(['commit', '--only', '-m', msg, '--', ...paths], { timeout: this.toolTimeoutMs, signal, label: 'git commit' });
+      return this.commitIntended(paths, msg, signal);
     }
     throw new Error('Unsupported git_local action.');
   }
 
-  async exec(file, args, { timeout, signal, label }) {
+  async commitIntended(paths, message, signal) {
+    const before = this.gitIdentity();
+    if (!this.admissionIdentity || before.head !== this.admissionIdentity.head || before.ref !== this.admissionIdentity.ref) throw new Error('Refusing commit: Git HEAD changed outside CLcode ownership.');
+    try {
+      this.gitProbe(['diff','--cached','--quiet','--no-ext-diff','--no-textconv','HEAD','--',...paths]);
+    } catch { throw new Error('Refusing commit: touched paths have external staged changes or index verification failed.'); }
+    const snapshot = mkdtempSync(join(tmpdir(), 'clcode-commit-snapshot-'));
+    let retain = false;
+    try {
+      // Git must never re-read mutable owner worktree bytes after our final
+      // hash check. Commit only the recorded intended bytes in a private
+      // snapshot while preserving the real repository and unrelated index.
+      for (const rel of paths) {
+        const intended = this.intended.get(rel);
+        if (!intended) throw new Error('Missing intended file snapshot.');
+        const dest = resolve(snapshot, rel);
+        if (!inside(snapshot, dest)) throw new Error('Invalid intended path.');
+        mkdirSync(dirname(dest), { recursive: true });
+        writeFileSync(dest, intended.bytes, { flag: 'wx', mode: intended.mode });
+        if (process.platform !== 'win32') chmodSync(dest, intended.mode & 0o777);
+      }
+      const gitContext = ['--git-dir=' + this.gitDir, '--work-tree=' + snapshot];
+      assertNoExternalGitFilters(this.gitExecutable, snapshot, childEnv(), gitContext);
+      const result = await this.gitExec(['commit','--only','-m',message,'--',...paths], { cwd: snapshot, gitContext, timeout: this.toolTimeoutMs, signal, label:'git commit' });
+      if (result.terminationConfirmed === false) {
+        retain = true;
+        return { ...result, effectUnknown: true, commitSnapshotRetained: true };
+      }
+      const unknown = reason => ({ ...result, ok: false, effectUnknown: true, error: reason });
+      let after;
+      try { after = this.gitIdentity(); }
+      catch { return unknown('Commit effect cannot be reconciled: Git HEAD is unreadable.'); }
+      if (after.ref !== before.ref) return unknown('Commit effect cannot be reconciled: Git branch changed.');
+      if (after.head === before.head) return result.ok ? unknown('Git reported success without a new commit.') : result;
+      // Verify observed commit ancestry, exact changed path ownership and
+      // intended source. LF/CRLF conversion is the only accepted text
+      // normalization; other transformations remain unqualified.
+      try {
+        const parents = this.gitProbe(['rev-list','--parents','-n','1',after.head]).trim().split(/\s+/);
+        if (parents.length !== 2 || parents[0] !== after.head || parents[1] !== before.head) return unknown('Observed commit has unexpected ancestry.');
+        const changed = this.gitProbe(['diff-tree','--no-commit-id','--name-only','-r','-z',after.head]).split('\0').filter(Boolean);
+        if (!changed.length || changed.some(rel=>!this.intended.has(rel))) return unknown('Observed commit contains paths outside CLcode ownership.');
+        for (const rel of changed) {
+          const actual = this.gitProbe(['cat-file','blob',after.head+':'+rel], { encoding:null });
+          const intended = this.intended.get(rel).bytes;
+          if (!actual.equals(intended) && !actual.equals(Buffer.from(intended.toString('utf8').replace(/\r\n/g,'\n')))) return unknown('Observed commit bytes differ from the recorded intended source.');
+        }
+      } catch { return unknown('Observed commit content could not be verified.'); }
+      this.admissionIdentity = after;
+      for (const rel of paths) {
+        const item = this.intended.get(rel);
+        this.admissionHashes.set(rel,{ hash:this.touched.get(rel), mode:item.mode });
+      }
+      this.touched.clear(); this.intended.clear();
+      return { ...result, commitId: after.head, commitVerified: true };
+    } finally { if (!retain) rmSync(snapshot,{recursive:true,force:true}); }
+  }
+
+  async exec(file, args, { timeout, signal, label, cwd = this.projectRoot }) {
     if (signal?.aborted) return { ok: false, command: label, exitCode: null, stdout: '', stderr: '', error: 'Operation aborted before process start.', aborted: true, timedOut: false, terminationConfirmed: true, terminationEvidence: 'not_started' };
     return new Promise(resolveResult => {
       let settled = false, stopReason = null, stopping = null, failure = null, timer, grace;
@@ -342,7 +440,7 @@ export class ScopedTools {
       const onAbort = () => stop('abort');
       try {
         child = spawn(file, args, {
-          cwd: this.projectRoot, windowsHide: true, shell: false,
+          cwd, windowsHide: true, shell: false,
           detached: process.platform !== 'win32',
           stdio: ['ignore', 'pipe', 'pipe'], env: childEnv(),
         });
