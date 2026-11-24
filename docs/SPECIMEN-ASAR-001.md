@@ -42,7 +42,7 @@ Dependency-free reader that:
 - performs bounded random-access reads of packed members;
 - resolves unpacked members only within `app.asar.unpacked`;
 - rejects invalid offsets, ranges and unsafe paths;
-- records a SHA-256 of the raw header Pickle for evidence correlation.
+- records the Electron-compatible SHA-256 of the JSON header string plus a separate SHA-256 of the raw Pickle framing for evidence correlation.
 
 It never rewrites an archive.
 
@@ -59,7 +59,8 @@ It:
 - reuses `specimen-patterns.json` from SPECIMEN-MAP-001;
 - stores archive/member hashes, internal paths, categories and scores;
 - persists only short redacted hit snippets;
-- records member integrity metadata when present.
+- records member integrity metadata when present;
+- records the JSON-header SHA used by Electron ASAR integrity and the raw Pickle SHA separately.
 
 Outputs:
 

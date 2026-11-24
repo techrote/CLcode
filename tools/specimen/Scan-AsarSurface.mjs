@@ -101,7 +101,7 @@ async function main(){
     const root=roots.find(r=>isWithin(r,archive))??dirname(archive); const archiveRelativePath=relative(root,archive).split(sep).join('/');
     let integrityMembers=0, unpackedMembers=0;
     for(const entry of entries){ if(entry.integrity) integrityMembers++; if(entry.unpacked) unpackedMembers++; }
-    archiveRows.push({root,archive,archiveRelativePath,size:info.archiveSize,sha256:archiveSha256,headerSha256:info.headerSha256,headerPickleSize:info.headerPickleSize,memberCount:entries.length,integrityMembers,unpackedMembers});
+    archiveRows.push({root,archive,archiveRelativePath,size:info.archiveSize,sha256:archiveSha256,headerSha256:info.headerSha256,headerPickleSha256:info.headerPickleSha256,headerPickleSize:info.headerPickleSize,memberCount:entries.length,integrityMembers,unpackedMembers});
     for(const entry of entries){
       totalMembers++;
       if(!shouldScan(entry,opts.maxMemberBytes)){skippedMembers++;continue;}

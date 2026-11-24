@@ -31,6 +31,7 @@ Expected before proceeding:
 - runtime/Desktop Node tests PASS;
 - specimen map self-test PASS;
 - ASAR internal map self-test PASS;
+- ASAR integrity self-test PASS;
 - runtime-correlation self-test PASS;
 - guarded patch apply/rollback self-test PASS;
 - launch-redaction/filter self-test PASS;
@@ -98,6 +99,18 @@ node .\tools\specimen\Summarize-AsarMap.mjs (Join-Path $asarMap 'asar-map.json')
 ```
 
 Review `ASAR-REPORT.md` beside the ordinary surface report. An internal ASAR match is still candidate evidence; Electron ASAR integrity may make direct archive modification unsuitable until integrity behavior is explicitly qualified.
+
+
+Qualify the Electron fuse/resource relationship **before** choosing `app.asar` as a patch target:
+
+```powershell
+node .\tools\specimen\Check-AsarIntegrity.mjs `
+  --exe 'C:\Path\To\Desktop\Claude.exe' `
+  --root 'C:\Path\To\Desktop' `
+  --out "$env:USERPROFILE\clcode-specimen-lab\maps\asar-integrity.json"
+```
+
+Interpret fuse state and packaged ASAR-header hash separately. A matching `INTEGRITY/ELECTRONASAR` resource does not itself prove enforcement; `EnableEmbeddedAsarIntegrityValidation` and `OnlyLoadAppFromAsar` are reported explicitly. If validation is enabled, do not perform a blind archive patch.
 
 Before launching a normal Code session, start both runtime observers in separate terminals:
 
@@ -197,6 +210,7 @@ Useful sanitized return material is:
 - exact CLcode evaluator SHA and GPTopus donor SHA;
 - baseline manifest summary and install-root/version facts;
 - static `REPORT.md` / candidate summary after reviewing snippets;
+- ASAR internal report plus reviewed ASAR integrity/fuse report;
 - runtime and launch reports after reviewing redaction;
 - E01/E02/E06 PASS/FAIL entries with real vs mock clearly labelled;
 - E06 run/event summary, test exit code, Git diff/stat and local commit SHA;

@@ -62,7 +62,7 @@
       "pr": 13,
       "name": "SPECIMEN-ASAR-001",
       "branch": "specimen/005-asar-map",
-      "sha": "ff5b74c5ce1b6a0be9ed4085b7ab4305981d7a39"
+      "sha": "ac7287a7b1c02dc707edc3144d7bcc857176343c"
     },
     {
       "pr": 14,
@@ -87,6 +87,12 @@
       "name": "DESKTOP-CLIENT-HARDENING-002",
       "branch": "desktop/002-run-follower-reuse",
       "sha": "67bde24075502a126026bbc8d89022bb2337b5ab"
+    },
+    {
+      "pr": 18,
+      "name": "SPECIMEN-ASAR-INTEGRITY-001",
+      "branch": "specimen/006-asar-integrity",
+      "sha": "73e36c48635567336407e5a8ad271d81567e457f"
     }
   ]
 }

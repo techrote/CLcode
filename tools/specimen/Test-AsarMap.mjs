@@ -37,6 +37,8 @@ try{
     'assets/image.png':Buffer.from([0,1,2,3,4,5]),
   }));
   const info=readAsarHeader(archive); const entries=listAsarEntries(info);
+  assert.equal(info.headerSha256, (await import('node:crypto')).createHash('sha256').update(info.headerString).digest('hex'));
+  assert.notEqual(info.headerSha256, info.headerPickleSha256);
   assert.equal(entries.filter(e=>e.type==='file').length,5);
   const main=entries.find(e=>e.path==='main.js');
   assert.match(readAsarEntry(info,main).toString('utf8'),/api\.anthropic\.com/);
