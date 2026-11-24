@@ -67,3 +67,29 @@ test('Windows termination plan kills the complete child process tree', async () 
   assert.deepEqual(terminationPlan('win32', 4321), { file:'taskkill', args:['/PID','4321','/T','/F'] });
   assert.deepEqual(terminationPlan('linux', 4321), { signal:'SIGTERM' });
 });
+
+test('tool subprocess environment excludes provider credentials and Node injection variables', async () => {
+  const { childEnv } = await import('../src/runtime/tools.mjs');
+  const env = childEnv({
+    Path: 'C:\\Windows\\System32',
+    USERPROFILE: 'C:\\Users\\fixture',
+    OPENAI_API_KEY: 'openai-secret',
+    OPENAI_FREE_API_KEY: 'free-secret',
+    NVIDIA_API_KEY: 'nvidia-secret',
+    ANTHROPIC_API_KEY: 'anthropic-secret',
+    GH_TOKEN: 'gh-secret',
+    GITHUB_TOKEN: 'github-secret',
+    AWS_SECRET_ACCESS_KEY: 'aws-secret',
+    NODE_OPTIONS: '--require malicious.js',
+    NODE_PATH: 'C:\\malicious',
+    GIT_AUTHOR_NAME: 'Fixture User',
+  });
+  assert.equal(env.Path, 'C:\\Windows\\System32');
+  assert.equal(env.USERPROFILE, 'C:\\Users\\fixture');
+  assert.equal(env.GIT_AUTHOR_NAME, 'Fixture User');
+  for (const key of [
+    'OPENAI_API_KEY', 'OPENAI_FREE_API_KEY', 'NVIDIA_API_KEY', 'ANTHROPIC_API_KEY',
+    'GH_TOKEN', 'GITHUB_TOKEN', 'AWS_SECRET_ACCESS_KEY', 'NODE_OPTIONS', 'NODE_PATH',
+  ]) assert.equal(env[key], undefined, `${key} must not reach project subprocesses`);
+});
+

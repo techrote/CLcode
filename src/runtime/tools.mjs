@@ -9,10 +9,23 @@ const execFileAsync = promisify(execFile);
 const MAX_FILE_BYTES = 512_000;
 const MAX_OUTPUT = 200_000;
 
-function childEnv() {
-  const env = { ...process.env };
-  delete env.NODE_TEST_CONTEXT;
-  return env;
+// Child tools execute project code and local Git, so they must not inherit the
+// runtime/provider credential environment. This is an environment boundary only;
+// it is not an OS/network sandbox.
+const CHILD_ENV_ALLOWLIST = new Set([
+  'PATH', 'PATHEXT', 'SYSTEMROOT', 'WINDIR', 'COMSPEC',
+  'TEMP', 'TMP', 'TMPDIR',
+  'HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH',
+  'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TERM', 'COLORTERM', 'NO_COLOR', 'NODE_ENV',
+  'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL',
+]);
+
+export function childEnv(env = process.env) {
+  const out = {};
+  for (const [name, value] of Object.entries(env)) {
+    if (value !== undefined && CHILD_ENV_ALLOWLIST.has(name.toUpperCase())) out[name] = value;
+  }
+  return out;
 }
 
 function inside(root, candidate) {
