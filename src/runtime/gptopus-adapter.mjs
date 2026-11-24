@@ -35,7 +35,7 @@ export class GPTopusAdapter {
       catch { throw new Error('GPTopus donor index is unreadable.'); }
       if (indexFlags.split('\0').some(entry => /^[a-zS] /.test(entry))) throw new Error('GPTopus donor index flags hide worktree changes; use a full clean checkout without assume-unchanged or skip-worktree.');
       let dirty;
-      try { dirty = execFileSync('git', ['-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--untracked-files=all'], { cwd: this.root, encoding: 'utf8', windowsHide: true, env: gitEnv }).trim(); }
+      try { dirty = execFileSync('git', ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--untracked-files=all'], { cwd: this.root, encoding: 'utf8', windowsHide: true, env: gitEnv }).trim(); }
       catch { throw new Error('GPTopus checkout status is unreadable; cannot verify donor source integrity.'); }
       if (dirty) throw new Error('GPTopus donor working tree is not clean; refusing to load source that differs from the pinned commit.');
     }

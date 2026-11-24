@@ -123,6 +123,7 @@ test('Git commit treats bracket-containing touched filenames literally and suppr
     execFileSync('git',['add','--',a,b],{cwd:project});
     execFileSync('git',['commit','-m','fixture: bracket paths'],{cwd:project,stdio:'pipe'});
     const hook=join(project,'.git','hooks','post-commit'), capture=join(project,'.git','hook-probe');
+    execFileSync('git',['config','core.hooksPath',join(project,'.git','hooks')],{cwd:project});
     writeFileSync(hook,'#!/bin/sh\nprintf ran > .git/hook-probe\n'); chmodSync(hook,0o755);
     const {ScopedTools}=await import('../src/runtime/tools.mjs');
     const tools=await ScopedTools.create(project);
@@ -148,5 +149,15 @@ test('file tools deny Git metadata and hardlink aliases; exact replacement is li
     const literal=join(project,'literal.txt'); writeFileSync(literal,'before');
     tools.editFile({path:'literal.txt',old_text:'before',new_text:'$&'});
     assert.equal(readFileSync(literal,'utf8'),'$&');
+  } finally {rmSync(root,{recursive:true,force:true});}
+});
+
+test('clean admission refuses hidden project index state', async () => {
+  const {root,project}=fixture();
+  try {
+    const {ScopedTools}=await import('../src/runtime/tools.mjs');
+    execFileSync('git',['update-index','--assume-unchanged','src/slug.mjs'],{cwd:project});
+    writeFileSync(join(project,'src','slug.mjs'),'external hidden change');
+    await assert.rejects(ScopedTools.create(project),/index flags/);
   } finally {rmSync(root,{recursive:true,force:true});}
 });

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { lstatSync, readFileSync, realpathSync, statSync, writeFileSync, renameSync, mkdtempSync, rmSync } from 'node:fs';
+import { lstatSync, readFileSync, realpathSync, statSync, writeFileSync, renameSync, mkdtempSync, rmSync, openSync, closeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -82,7 +82,9 @@ export class ScopedTools {
     const sameRoot = process.platform === 'win32' ? gitRoot.toLowerCase() === requested.toLowerCase() : gitRoot === requested;
     if (!sameRoot) throw new Error(`Project root must be the Git top-level directory: ${gitRoot}`);
     if (options.requireClean !== false) {
-      const status = await execFileAsync('git', ['-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--untracked-files=all'], { cwd: gitRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
+      const flags = await execFileAsync('git', ['ls-files', '-v', '-z'], { cwd: gitRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
+      if (flags.stdout.split('\0').some(entry => /^[a-zS] /.test(entry))) throw new Error('Project index flags hide worktree changes; clear assume-unchanged or skip-worktree before admission.');
+      const status = await execFileAsync('git', ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--untracked-files=all'], { cwd: gitRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env });
       if (String(status.stdout ?? '').trim()) throw new Error('Project working tree must be clean before an agent run; commit, stash or discard existing changes first.');
     }
     return new ScopedTools(gitRoot, options);
@@ -158,6 +160,7 @@ export class ScopedTools {
     const originalBytes = readFileSync(file);
     if (originalBytes.length > MAX_FILE_BYTES) throw new Error(`File exceeds ${MAX_FILE_BYTES} bytes.`);
     const original = originalBytes.toString('utf8');
+    if (!Buffer.from(original, 'utf8').equals(originalBytes)) throw new Error('File is not lossless UTF-8 text.');
     const matches = original.split(old_text).length - 1;
     if (matches === 0) throw new Error('old_text was not found; re-read the file before editing.');
     if (!replace_all && matches !== 1) throw new Error(`old_text occurs ${matches} times; provide a more specific edit or set replace_all.`);
@@ -165,11 +168,14 @@ export class ScopedTools {
     const intended = Buffer.from(next, 'utf8');
     if (intended.length > MAX_FILE_BYTES) throw new Error(`Edited file exceeds ${MAX_FILE_BYTES} bytes.`);
     const tmp = join(dirname(file), `.${randomBytes(5).toString('hex')}.clcode.tmp`);
+    let created = false;
     try {
-      writeFileSync(tmp, intended, { flag: 'wx', mode: info.mode });
+      const fd = openSync(tmp, 'wx', info.mode);
+      created = true;
+      try { writeFileSync(fd, intended); } finally { closeSync(fd); }
       if (sha256(readFileSync(file)) !== sha256(originalBytes)) throw new Error('File changed during edit; refusing replacement.');
       renameSync(tmp, file);
-    } finally { rmSync(tmp, { force: true }); }
+    } finally { if (created) rmSync(tmp, { force: true }); }
     const rel = relative(this.projectRoot, file).split(sep).join('/');
     // Record the intended bytes, never a concurrent writer's post-rename bytes.
     this.touched.set(rel, sha256(intended));
