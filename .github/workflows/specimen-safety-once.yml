@@ -1,0 +1,38 @@
+name: One-shot specimen physical-safety qualification
+on:
+  push:
+    branches:
+      - specimen/009-physical-safety
+    paths:
+      - '.github/workflows/specimen-safety-once.yml'
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Exact source and native toolchain
+        shell: powershell
+        run: |
+          git rev-parse HEAD
+          git --version
+          node --version
+          $PSVersionTable.PSVersion.ToString()
+      - name: Synthetic specimen tests only
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tests = @('Test-SpecimenMap','Test-AsarMap','Test-AsarIntegrity','Test-EvidenceFusion','Test-SurgeryExperimentPacket','Test-RuntimeAnalysis','Test-SpecimenPatch','Test-LaunchRedaction')
+          foreach ($name in $tests) {
+            node "tools/specimen/$name.mjs"
+            if ($LASTEXITCODE -ne 0) { throw "Failed: $name" }
+          }
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tools/specimen/Test-SpecimenTooling.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'PowerShell specimen tooling failed' }
