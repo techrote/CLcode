@@ -30,6 +30,12 @@ export function childEnv(env = process.env) {
   return out;
 }
 
+// Windows JS realpath may retain an 8.3 directory spelling while Git reports
+// the long path. Native realpath resolves both to the same filesystem path.
+function canonicalPath(path) {
+  return process.platform === 'win32' ? realpathSync.native(path) : realpathSync(path);
+}
+
 function inside(root, candidate) {
   const rel = relative(root, candidate);
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
@@ -43,7 +49,7 @@ export function resolveExecutable(name, env = process.env, { rejectRoot = null }
   if (typeof name !== 'string' || !/^[A-Za-z0-9._-]+$/.test(name)) throw new Error('Executable name is invalid.');
   const pathValue = envValue(env, 'PATH');
   if (!pathValue) throw new Error(`Executable ${name} cannot be resolved because PATH is empty.`);
-  const blockedRoot = rejectRoot ? realpathSync(rejectRoot) : null;
+  const blockedRoot = rejectRoot ? canonicalPath(rejectRoot) : null;
   const suffixes = process.platform === 'win32' ? ['.exe'] : [''];
   for (let directory of String(pathValue).split(delimiter)) {
     directory = directory.trim();
@@ -53,7 +59,7 @@ export function resolveExecutable(name, env = process.env, { rejectRoot = null }
     if (!directory || !isAbsolute(directory)) continue;
     for (const suffix of suffixes) {
       try {
-        const candidate = realpathSync(join(directory, name.endsWith(suffix) ? name : name + suffix));
+        const candidate = canonicalPath(join(directory, name.endsWith(suffix) ? name : name + suffix));
         if (!statSync(candidate).isFile()) continue;
         if (blockedRoot && inside(blockedRoot, candidate)) continue;
         if (process.platform !== 'win32') accessSync(candidate, constants.X_OK);
@@ -125,7 +131,7 @@ async function terminateProcessTree(child) {
 export class ScopedTools {
   constructor(projectRoot, options = {}) {
     if (!projectRoot) throw new Error('projectRoot is required.');
-    const root = realpathSync(projectRoot);
+    const root = canonicalPath(projectRoot);
     this.projectRoot = root;
     this.testTimeoutMs = options.testTimeoutMs ?? 90_000;
     this.toolTimeoutMs = options.toolTimeoutMs ?? 30_000;
@@ -141,10 +147,10 @@ export class ScopedTools {
     // configuration (for example core.fsmonitor). Never expose provider/cloud
     // credentials before the ordinary tool subprocess boundary is established.
     const env = childEnv();
-    const requested = realpathSync(projectRoot);
+    const requested = canonicalPath(projectRoot);
     const gitExecutable = resolveExecutable('git', env, { rejectRoot: requested });
     const { stdout } = await execFileAsync(gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'rev-parse', '--show-toplevel'], { cwd: requested, timeout: 10_000, windowsHide: true, env });
-    const gitRoot = realpathSync(stdout.trim());
+    const gitRoot = canonicalPath(stdout.trim());
     const sameRoot = process.platform === 'win32' ? gitRoot.toLowerCase() === requested.toLowerCase() : gitRoot === requested;
     if (!sameRoot) throw new Error(`Project root must be the Git top-level directory: ${gitRoot}`);
     const tools = new ScopedTools(gitRoot, { ...options, gitExecutable });
@@ -188,14 +194,14 @@ export class ScopedTools {
     if (after.head !== identity.head || after.ref !== identity.ref) throw new Error('Git HEAD changed during admission.');
     this.admissionHashes = hashes;
     this.admissionIdentity = identity;
-    this.gitDir = realpathSync(this.gitProbe(['rev-parse','--absolute-git-dir']).trim());
+    this.gitDir = canonicalPath(this.gitProbe(['rev-parse','--absolute-git-dir']).trim());
   }
 
   async acquireRunLease(runId, stateDir) {
     // The lease is in the actual per-worktree Git directory, not the caller's
     // chosen state directory. Separate CLcode processes cannot both own it.
     const { stdout } = await execFileAsync(this.gitExecutable, ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'rev-parse', '--absolute-git-dir'], { cwd: this.projectRoot, timeout: 10_000, windowsHide: true, encoding: 'utf8', env: childEnv() });
-    const file = join(realpathSync(stdout.trim()), 'clcode-runtime.lease');
+    const file = join(canonicalPath(stdout.trim()), 'clcode-runtime.lease');
     const owner = JSON.stringify({ runId, stateDir, pid: process.pid, token: randomBytes(16).toString('hex'), acquiredAt: new Date().toISOString() });
     let fd;
     try { fd = openSync(file, 'wx', 0o600); }
@@ -248,7 +254,7 @@ export class ScopedTools {
     const metadata = file => relative(this.projectRoot, file).split(sep).some(part => part.replace(/[. ]+$/, '').toLowerCase() === '.git');
     if (metadata(candidate)) throw new Error('Git metadata paths are not project files.');
     if (lstatSync(candidate).isSymbolicLink()) throw new Error('Symbolic-link paths are not editable through this tool.');
-    const actual = realpathSync(candidate);
+    const actual = canonicalPath(candidate);
     if (!inside(this.projectRoot, actual)) throw new Error('Resolved path escapes project root.');
     if (metadata(actual)) throw new Error('Git metadata paths are not project files.');
     const info = statSync(actual);

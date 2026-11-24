@@ -37,3 +37,5 @@ These tests do not establish a general OS/network sandbox, arbitrary hostile or 
 FIRST-WINDOWS-001 handoff: select only an exact #37 head that passed the complete serial suite, record its SHA and CI evidence, preserve the existing evaluator's other component pins, and run disposable-PC/live gates explicitly. Do not label live gates passed on mock evidence.
 
 The branch-scoped, read-only hosted qualification workflow was added solely to establish exact-checkout evidence because the local agent environment cannot clone the repository. It uses no real provider credentials or live requests.
+
+First hosted Windows run 45454210761 at 0556ee0657245056f67a1a8921909f607d973fef: Linux 74/74; Windows 31 pass / 22 fail / 21 cancelled. Git emitted long temporary-directory paths while JavaScript realpath retained a short alias, falsely refusing valid roots. Native realpath canonicalization is used at all tool path boundaries; nested-root refusal is still tested. Shell fixtures now use portable explicit sh commands and retain the fsmonitor positive control.

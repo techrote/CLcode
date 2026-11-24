@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, rmSync, writeFileSync, mkdtempSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync, mkdtempSync, mkdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawn } from 'node:child_process';
@@ -373,4 +373,14 @@ test('actual project test process receives no synthetic provider secrets or Node
     for(const k of names) {if(saved[k]===undefined) delete process.env[k];else process.env[k]=saved[k];}
     rmSync(root,{recursive:true,force:true});
   }
+});
+
+test('project admission compares native canonical Git root but rejects a nested directory', async () => {
+  const {root,project}=fixture();
+  try {
+    const tools=await ScopedTools.create(project);
+    const expected=process.platform==='win32'?realpathSync.native(project):realpathSync(project);
+    assert.equal(tools.projectRoot,expected);
+    await assert.rejects(ScopedTools.create(join(project,'src')),/Git top-level directory/i);
+  } finally {rmSync(root,{recursive:true,force:true});}
 });
