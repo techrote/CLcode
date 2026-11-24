@@ -121,3 +121,30 @@ The comparison emits added/removed/changed file rows and a JSON summary. It does
 - The primary questions are **where principal model ownership lives**, **which process owns the agent/tool loop**, **how Desktop and the embedded engine communicate**, and **which Anthropic auth/quota/service dependencies are actually required for local Code operation**.
 - Local research modification and redistribution are separate questions. Do not commit or publish vendor binaries/assets merely because they are on a disposable PC.
 - The disposable disk is not a disposable credential boundary. Use scoped test credentials and avoid recording valuable secrets.
+
+
+## ASAR internal mapping
+
+Electron `app.asar` often contains the JavaScript/module paths that the ordinary surface scanner can only identify as one opaque high-value artifact. SPECIMEN-ASAR-001 adds a dependency-free, read-only internal mapper that keeps the project's Node 20.11+ floor.
+
+Self-test:
+
+```powershell
+node .\tools\specimen\Test-AsarMap.mjs
+```
+
+Map every ASAR below the pinned Desktop installation root:
+
+```powershell
+$asarMap = Join-Path $env:USERPROFILE 'clcode-specimen-lab\maps\desktop-asar'
+node .\tools\specimen\Scan-AsarSurface.mjs `
+  --root 'C:\Path\To\Pinned\Desktop\Install' `
+  --out $asarMap
+
+node .\tools\specimen\Summarize-AsarMap.mjs `
+  (Join-Path $asarMap 'asar-map.json')
+```
+
+Outputs contain archive/member hashes, internal member paths, category scores and short redacted snippets only; archive members are not extracted to the evidence directory.
+
+Read `docs/SPECIMEN-ASAR-001.md` before any ASAR modification. Electron can enforce an embedded ASAR-header integrity hash, so an internal candidate is **mapping evidence**, not automatic permission or technical viability for a direct `app.asar` patch.
